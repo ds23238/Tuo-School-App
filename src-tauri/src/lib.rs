@@ -1,4 +1,5 @@
 mod commands;
+mod error;
 
 use std::path::PathBuf;
 
@@ -17,8 +18,10 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            let db = Database::open(&data_dir.join("tsa-sync.db"))?;
+            tsa_moodle::init(&db)?;
             app.manage(AppState {
-                db: Database::open(&data_dir.join("tsa-sync.db"))?,
+                db,
                 secrets: Box::new(KeyringStore),
                 default_sync_dir: app.path().home_dir()?.join("TSA-Sync"),
             });
@@ -30,6 +33,11 @@ pub fn run() {
             commands::list_accounts,
             commands::remove_account,
             commands::check_keyring,
+            commands::moodle_check_site,
+            commands::moodle_login,
+            commands::moodle_courses,
+            commands::moodle_refresh_courses,
+            commands::moodle_set_course_sync,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri-Anwendung konnte nicht gestartet werden");

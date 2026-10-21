@@ -2,6 +2,7 @@
   import { getVersion } from "@tauri-apps/api/app";
   import { ask, open } from "@tauri-apps/plugin-dialog";
   import { api, type Account, type Settings } from "../lib/api";
+  import { errorText } from "../lib/errors";
   import { i18n, locales } from "../lib/i18n/index.svelte";
 
   let settings = $state<Settings | null>(null);
@@ -15,7 +16,7 @@
       error = null;
       await action();
     } catch (e) {
-      error = String(e);
+      error = errorText(e);
     }
   }
 
@@ -53,7 +54,7 @@
 </script>
 
 {#if error}
-  <p class="notice error">{i18n.t.error.generic}: {error}</p>
+  <p class="notice error">{error}</p>
 {/if}
 {#if !keyringOk}
   <p class="notice warning">{i18n.t.settings.keyringMissing}</p>
@@ -122,16 +123,5 @@
   }
   code {
     word-break: break-all;
-  }
-  .notice {
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin: 0 0 16px;
-  }
-  .warning {
-    background: var(--warning-soft);
-  }
-  .error {
-    background: var(--error-soft);
   }
 </style>

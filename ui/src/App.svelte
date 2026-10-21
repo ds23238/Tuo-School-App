@@ -1,5 +1,6 @@
 <script lang="ts">
   import { i18n } from "./lib/i18n/index.svelte";
+  import Courses from "./views/Courses.svelte";
   import Placeholder from "./views/Placeholder.svelte";
   import Settings from "./views/Settings.svelte";
 
@@ -21,6 +22,8 @@
     <h1>{i18n.t.nav[view]}</h1>
     {#if view === "settings"}
       <Settings />
+    {:else if view === "courses"}
+      <Courses />
     {:else}
       <Placeholder text={i18n.t.placeholder[view]} />
     {/if}

@@ -14,3 +14,4 @@ serde_json.workspace = true
 tauri.workspace = true
 tsa-core.workspace = true
 tauri-plugin-dialog.workspace = true
+tsa-moodle.workspace = true
