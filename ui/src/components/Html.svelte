@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { openUrl } from "@tauri-apps/plugin-opener";
   import { api } from "../lib/api";
 
   /** Bereits im Backend bereinigtes HTML. */
@@ -12,7 +11,7 @@
     if (!link) return;
     e.preventDefault();
     const href = link.getAttribute("href")!;
-    const open = moodleBase && href.startsWith(moodleBase) ? api.moodle.openInBrowser(href) : openUrl(href);
+    const open = moodleBase && href.startsWith(moodleBase) ? api.moodle.openInBrowser(href) : api.openUrl(href);
     open.catch(() => {});
   }
 </script>
@@ -33,6 +32,23 @@
   }
   .html :global(*) {
     max-width: 100%;
+  }
+  /* Moodle-Symbole und SVGs ohne eigene Größe würden sonst die volle
+     Breite einnehmen (Markierung siehe crates/moodle/src/html.rs). */
+  .html :global(img.icon),
+  .html :global(img.iconlarge),
+  .html :global(img[src$="#icon"]) {
+    width: 1.5em;
+    height: 1.5em;
+    vertical-align: middle;
+    margin-right: 0.3em;
+  }
+  .html :global(img.iconsmall) {
+    width: 1em;
+    height: 1em;
+  }
+  .html :global(img[src$="#svg"]:not([width])) {
+    max-width: min(100%, 320px);
   }
   .html :global(p) {
     margin: 0 0 0.7em;

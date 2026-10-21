@@ -58,6 +58,21 @@ const STYLE_PROPERTIES: &[&str] = &[
     "text-decoration",
 ];
 
+/// Markiert Bilder, deren Größe Moodle sonst per CSS festlegt: Symbole aus
+/// dem Theme (`#icon`) und SVG-Grafiken (`#svg`). SVGs ohne eigene Größe
+/// würden sonst die ganze Breite füllen. Das Fragment erreicht den Server
+/// nicht, die Oberfläche setzt die Größe per CSS.
+fn size_hint(url: &Url) -> &'static str {
+    let path = url.path();
+    if path.contains("/theme/image.php") || path.contains("/pix/") {
+        "#icon"
+    } else if path.to_ascii_lowercase().ends_with(".svg") {
+        "#svg"
+    } else {
+        ""
+    }
+}
+
 /// Entfernt alles Ausführbare (Skripte, Event-Handler, iframes) und alle
 /// Styles außer Layout-Angaben; leitet Bilder über [`MediaUrls`] um. Links
 /// werden absolute Adressen.
@@ -69,6 +84,7 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         .url_relative(UrlRelative::RewriteWithBase(base.clone()))
         .link_rel(Some("noopener noreferrer"))
         .add_generic_attributes(["style"])
+        .add_allowed_classes("img", ["icon", "iconlarge", "iconsmall"])
         .add_tags(["video", "audio", "source", "track"])
         .add_tag_attributes(
             "video",
@@ -89,7 +105,11 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
                     .join(value)
                     .ok()
                     .filter(|u| matches!(u.scheme(), "http" | "https"))
-                    .map(|u| media_for_images.url(&u).into());
+                    .map(|u| {
+                        let mut out = media_for_images.url(&u);
+                        out.push_str(size_hint(&u));
+                        out.into()
+                    });
             }
             Some(value.into())
         })
@@ -156,6 +176,19 @@ mod tests {
             "{out}"
         );
         assert!(out.contains(r#"type="video/mp4""#));
+    }
+
+    #[test]
+    fn marks_icons_and_svgs() {
+        let out = clean(
+            r#"<img class="icon foo" src="/theme/image.php/boost/core/1/f/pdf"><img src="/pluginfile.php/1/a.SVG">"#,
+        );
+        assert!(
+            out.starts_with(r#"<img class="icon" src="media://"#),
+            "{out}"
+        );
+        assert!(out.contains(r##"#icon">"##), "{out}");
+        assert!(out.contains(r##"#svg">"##), "{out}");
     }
 
     #[test]

@@ -211,7 +211,7 @@ pub fn html_to_text(html: &str) -> String {
         .replace("<br />", "\n")
         .replace("<br/>", "\n");
     let text = ammonia::Builder::empty().clean(&marked).to_string();
-    plain(&text)
+    html_escape::decode_html_entities(text.trim()).into_owned()
 }
 
 /// Klartext als HTML für Moodle: Leerzeilen trennen Absätze.

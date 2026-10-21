@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, type Module, type MoodleFile } from "../lib/api";
   import { courseContext } from "../lib/courseContext";
   import { errorText } from "../lib/errors";
@@ -60,7 +59,7 @@
     if (single) return openFile(single);
     if (module.kind === "folder") return;
     if (opensInApp(module)) return nav.openModule(module);
-    if (module.link) return void openUrl(module.link).catch(() => {});
+    if (module.link) return run(null, () => api.openUrl(module.link!));
     if (module.url) run(null, () => api.moodle.openInBrowser(module.url!));
   }
 

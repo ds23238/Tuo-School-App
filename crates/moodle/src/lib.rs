@@ -70,11 +70,36 @@ const MIGRATIONS: &[&str] = &[
 ];
 
 /// Moodle liefert Namen als HTML-Text, z. B. `Kunst &amp; Musik`.
+///
+/// Ergebnis ist reiner Text: Tags (auch maskierte wie `&lt;br&gt;`) fallen
+/// weg, Zeilenumbrüche werden zu Leerzeichen.
 pub(crate) fn plain(text: &str) -> String {
-    html_escape::decode_html_entities(text.trim()).into_owned()
+    let decoded = html_escape::decode_html_entities(text);
+    // Umbrüche vorher mit Leerzeichen trennen, sonst kleben Wörter zusammen.
+    let spaced = decoded
+        .replace("<br", " <br")
+        .replace("<BR", " <BR")
+        .replace("</p>", "</p> ");
+    let stripped = ammonia::Builder::empty().clean(&spaced).to_string();
+    let text = html_escape::decode_html_entities(&stripped);
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Legt die Moodle-Tabellen an bzw. aktualisiert sie.
 pub fn init(db: &Database) -> tsa_core::Result<()> {
     db.migrate_module("moodle", MIGRATIONS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain;
+
+    #[test]
+    fn plain_text() {
+        assert_eq!(plain(" Kunst &amp; Musik "), "Kunst & Musik");
+        assert_eq!(plain("Zeile 1<br>Zeile 2"), "Zeile 1 Zeile 2");
+        assert_eq!(plain("Zeile 1&lt;br /&gt;Zeile 2"), "Zeile 1 Zeile 2");
+        assert_eq!(plain("<span lang=\"de\">Bio</span> 10b"), "Bio 10b");
+        assert_eq!(plain("a &lt; b"), "a < b");
+    }
 }

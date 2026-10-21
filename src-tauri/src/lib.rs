@@ -1,5 +1,6 @@
 mod commands;
 mod error;
+mod launch;
 mod media;
 
 use std::path::PathBuf;
@@ -38,6 +39,7 @@ pub fn run() {
             commands::list_accounts,
             commands::remove_account,
             commands::check_keyring,
+            commands::open_url,
             commands::moodle_check_site,
             commands::moodle_login,
             commands::moodle_courses,

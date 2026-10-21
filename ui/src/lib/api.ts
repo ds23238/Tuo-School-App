@@ -179,6 +179,7 @@ export const api = {
   listAccounts: () => invoke<Account[]>("list_accounts"),
   removeAccount: (service: Service) => invoke<void>("remove_account", { service }),
   checkKeyring: () => invoke<void>("check_keyring"),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
 
   moodle: {
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),

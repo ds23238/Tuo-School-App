@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_opener::OpenerExt;
 use tsa_core::{Account, SecretKind, Service, Settings};
 use tsa_moodle::assign::{Assignment, Draft};
 use tsa_moodle::contents::CourseView;
@@ -12,7 +11,7 @@ use tsa_moodle::sync::{CourseFiles, course_dir};
 use tsa_moodle::{Course, Session};
 
 use crate::error::Result;
-use crate::{AppState, media};
+use crate::{AppState, launch, media};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings> {
@@ -93,12 +92,6 @@ fn sync_dir(state: &AppState) -> Result<PathBuf> {
     Ok(Settings::load(&state.db, &state.default_sync_dir)?.sync_dir)
 }
 
-fn open_path(app: &AppHandle, path: &Path) -> Result<()> {
-    Ok(app
-        .opener()
-        .open_path(path.to_string_lossy(), None::<&str>)?)
-}
-
 #[tauri::command]
 pub async fn moodle_course(state: State<'_, AppState>, id: i64) -> Result<Option<CourseView>> {
     let root = sync_dir(&state)?;
@@ -138,7 +131,7 @@ pub async fn moodle_sync_course(state: State<'_, AppState>, id: i64) -> Result<u
 pub async fn moodle_open_file(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<()> {
     let root = sync_dir(&state)?;
     let path = moodle(&state).local_file(id, &root).await?;
-    open_path(&app, &path)
+    launch::path(&app, &path).await
 }
 
 /// Holt die neue Version; die bisherige Datei bleibt umbenannt erhalten.
@@ -150,14 +143,18 @@ pub async fn moodle_update_file(state: State<'_, AppState>, id: i64) -> Result<(
 }
 
 #[tauri::command]
-pub fn moodle_open_course_folder(app: AppHandle, state: State<AppState>, id: i64) -> Result<()> {
+pub async fn moodle_open_course_folder(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<()> {
     let course = Course::list(&state.db)?
         .into_iter()
         .find(|c| c.id == id)
         .ok_or(tsa_moodle::Error::FileNotFound)?;
     let dir = sync_dir(&state)?.join(course_dir(&course.full_name));
     std::fs::create_dir_all(&dir).map_err(tsa_moodle::Error::Io)?;
-    open_path(&app, &dir)
+    launch::path(&app, &dir).await
 }
 
 /// Öffnet eine Moodle-Seite im Browser, wenn möglich bereits angemeldet.
@@ -168,7 +165,7 @@ pub async fn moodle_open_in_browser(
     url: String,
 ) -> Result<()> {
     let url = moodle(&state).autologin_url(&url).await?;
-    Ok(app.opener().open_url(url, None::<&str>)?)
+    launch::url(&app, &url).await
 }
 
 #[tauri::command]
@@ -239,5 +236,11 @@ pub async fn moodle_open_assignment_file(
     let path = moodle(&state)
         .assignment_file(course_id, module_id, feedback, &name, &dir, &media::urls())
         .await?;
-    open_path(&app, &path)
+    launch::path(&app, &path).await
+}
+
+/// Öffnet einen Web- oder Mail-Link im Standardprogramm.
+#[tauri::command]
+pub async fn open_url(app: AppHandle, url: String) -> Result<()> {
+    launch::url(&app, &url).await
 }

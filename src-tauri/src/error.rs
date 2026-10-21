@@ -8,6 +8,15 @@ pub struct CommandError {
     message: String,
 }
 
+impl CommandError {
+    pub fn new(code: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+        }
+    }
+}
+
 impl From<tsa_core::Error> for CommandError {
     fn from(e: tsa_core::Error) -> Self {
         Self {
