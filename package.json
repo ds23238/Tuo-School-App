@@ -1,0 +1,14 @@
+{
+  "name": "tsa-sync",
+  "private": true,
+  "workspaces": ["ui"],
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "check": "npm -w ui run check"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}
