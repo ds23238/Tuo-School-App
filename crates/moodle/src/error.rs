@@ -14,7 +14,7 @@ pub enum Error {
     InvalidToken,
     #[error("Nicht bei Moodle angemeldet")]
     NotSignedIn,
-    #[error("Moodle meldet: {message} ({code})")]
+    #[error("{message}")]
     Moodle { code: String, message: String },
     #[error("Unerwartete Antwort von Moodle: {0}")]
     Response(#[from] serde_json::Error),

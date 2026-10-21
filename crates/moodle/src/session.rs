@@ -2,8 +2,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tsa_core::{Account, Database, SecretKind, SecretStore, Service};
 
+use url::Url;
+
 use crate::client::normalize_url;
+use crate::contents::{self, CourseView, RemoteSection};
 use crate::courses::RemoteCourse;
+use crate::html::MediaUrls;
 use crate::{Client, Course, Error, Result};
 
 /// Ergebnis der Prüfung einer Adresse vor dem Login.
@@ -56,6 +60,7 @@ impl<'a> Session<'a> {
         let previous = Account::get(self.db, Service::Moodle)?;
         if previous.is_some_and(|p| p.base_url != site.url || p.username != username) {
             Course::clear(self.db)?;
+            contents::clear(self.db)?;
         }
         self.secrets
             .set(Service::Moodle, SecretKind::Token, &token)?;
@@ -73,7 +78,58 @@ impl<'a> Session<'a> {
 
     pub fn sign_out(&self) -> Result<()> {
         Account::remove(self.db, self.secrets, Service::Moodle)?;
-        Course::clear(self.db)
+        Course::clear(self.db)?;
+        contents::clear(self.db)
+    }
+
+    fn base(&self) -> Result<Url> {
+        let account = Account::get(self.db, Service::Moodle)?.ok_or(Error::NotSignedIn)?;
+        normalize_url(&account.base_url)
+    }
+
+    /// Zuletzt geladener Stand eines Kurses, auch offline.
+    pub fn cached_course(&self, course_id: i64, media: &MediaUrls) -> Result<Option<CourseView>> {
+        let Some((sections, fetched_at)) = contents::load(self.db, course_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(contents::view(
+            course_id,
+            sections,
+            fetched_at,
+            &self.base()?,
+            media,
+        )))
+    }
+
+    pub async fn refresh_course(&self, course_id: i64, media: &MediaUrls) -> Result<CourseView> {
+        let raw: serde_json::Value = self
+            .call(
+                "core_course_get_contents",
+                &[("courseid", course_id.to_string())],
+            )
+            .await?;
+        let sections: Vec<RemoteSection> = serde_json::from_value(raw.clone())?;
+        let fetched_at = contents::store(self.db, course_id, &raw)?;
+        Ok(contents::view(
+            course_id,
+            sections,
+            fetched_at,
+            &self.base()?,
+            media,
+        ))
+    }
+
+    /// Lädt ein eingebettetes Bild o. Ä.; Dateien der Seite mit Token.
+    pub async fn fetch_media(&self, url: &Url) -> Result<(Vec<u8>, Option<String>)> {
+        if !matches!(url.scheme(), "http" | "https") {
+            return Err(Error::InvalidUrl(url.to_string()));
+        }
+        let client = Client::new(self.base()?);
+        let url = match self.secrets.get(Service::Moodle, SecretKind::Token)? {
+            Some(token) => client.authorize(url, &token),
+            None => url.clone(),
+        };
+        client.download(url).await
     }
 
     /// Lädt die Kursliste neu und gibt den gespeicherten Stand zurück.

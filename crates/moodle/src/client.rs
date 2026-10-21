@@ -197,6 +197,40 @@ impl Client {
         Ok(serde_json::from_value(value)?)
     }
 
+    /// Lädt eine Datei; liefert Inhalt und Content-Type.
+    pub async fn download(&self, url: Url) -> Result<(Vec<u8>, Option<String>)> {
+        let response = self.http.get(url).send().await?.error_for_status()?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        Ok((response.bytes().await?.to_vec(), content_type))
+    }
+
+    /// Macht eine Datei-Adresse der Seite mit dem Token abrufbar:
+    /// `pluginfile.php` braucht dafür den Webservice-Pfad. Fremde Adressen
+    /// bleiben unverändert und bekommen kein Token.
+    pub fn authorize(&self, url: &Url, token: &str) -> Url {
+        let same_site =
+            url.origin() == self.base.origin() && url.path().starts_with(self.base.path());
+        if !same_site {
+            return url.clone();
+        }
+        let mut url = url.clone();
+        let relative = url.path()[self.base.path().len()..].to_owned();
+        if let Some(rest) = relative.strip_prefix("pluginfile.php/") {
+            url.set_path(&format!(
+                "{}webservice/pluginfile.php/{rest}",
+                self.base.path()
+            ));
+        }
+        if relative.contains("pluginfile.php/") {
+            url.query_pairs_mut().append_pair("token", token);
+        }
+        url
+    }
+
     pub async fn site_info(&self, token: &str) -> Result<SiteInfo> {
         self.call(token, "core_webservice_get_site_info", &[]).await
     }
@@ -225,6 +259,37 @@ mod tests {
         ];
         for (input, expected) in cases {
             assert_eq!(normalize_url(input).unwrap().as_str(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn authorize() {
+        let client = Client::new(Url::parse("https://e.org/moodle/").unwrap());
+        let cases = [
+            (
+                "https://e.org/moodle/pluginfile.php/1/a.png",
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.png?token=T",
+            ),
+            (
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.pdf?forcedownload=1",
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.pdf?forcedownload=1&token=T",
+            ),
+            (
+                "https://e.org/moodle/theme/image.php/boost/f/pdf",
+                "https://e.org/moodle/theme/image.php/boost/f/pdf",
+            ),
+            (
+                "https://e.org/other/pluginfile.php/1/a.png",
+                "https://e.org/other/pluginfile.php/1/a.png",
+            ),
+            (
+                "https://evil.example/pluginfile.php/1/a",
+                "https://evil.example/pluginfile.php/1/a",
+            ),
+        ];
+        for (input, expected) in cases {
+            let url = Url::parse(input).unwrap();
+            assert_eq!(client.authorize(&url, "T").as_str(), expected, "{input}");
         }
     }
 

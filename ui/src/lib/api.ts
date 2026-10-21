@@ -38,6 +38,53 @@ export interface Course {
   lastAccess: number | null;
 }
 
+export interface CourseView {
+  courseId: number;
+  /** Unix-Zeit des Abrufs. */
+  fetchedAt: number;
+  sections: Section[];
+}
+
+export interface Section {
+  id: number;
+  number: number;
+  name: string;
+  /** Bereinigtes HTML. */
+  summary: string;
+  visible: boolean;
+  available: boolean;
+  availability: string | null;
+  modules: Module[];
+}
+
+export interface Module {
+  id: number;
+  name: string;
+  /** Moodle-Modulname, z. B. `resource`, `assign`, `label`. */
+  kind: string;
+  kindName: string;
+  description: string | null;
+  icon: string | null;
+  url: string | null;
+  link: string | null;
+  visible: boolean;
+  available: boolean;
+  availability: string | null;
+  indent: number;
+  dates: { label: string; timestamp: number }[];
+  completed: boolean | null;
+  files: MoodleFile[];
+  subsection: Section | null;
+}
+
+export interface MoodleFile {
+  name: string;
+  path: string;
+  size: number;
+  modified: number | null;
+  mime: string | null;
+}
+
 /** Fehler aus dem Backend, siehe src-tauri/src/error.rs. */
 export interface CommandError {
   code: string;
@@ -63,5 +110,7 @@ export const api = {
     refreshCourses: () => invoke<Course[]>("moodle_refresh_courses"),
     setCourseSync: (id: number, sync: boolean) =>
       invoke<void>("moodle_set_course_sync", { id, sync }),
+    course: (id: number) => invoke<CourseView | null>("moodle_course", { id }),
+    refreshCourse: (id: number) => invoke<CourseView>("moodle_refresh_course", { id }),
   },
 };

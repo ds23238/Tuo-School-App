@@ -9,6 +9,7 @@
   --accent-soft: #e3ecfa;
   --warning-soft: #fdf1d8;
   --error-soft: #fbe2e0;
+  --success: #2e7d32;
   color-scheme: light dark;
   font-family: system-ui, "Segoe UI", Roboto, Ubuntu, sans-serif;
   font-size: 15px;
@@ -26,6 +27,7 @@
     --accent-soft: #24324a;
     --warning-soft: #43381f;
     --error-soft: #4a2826;
+    --success: #7cc47f;
   }
 }
 
@@ -88,4 +90,12 @@ button.primary {
 
 .muted {
   color: var(--text-muted);
+}
+
+.badge {
+  font-size: 0.8em;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import MoodleLogin from "../components/MoodleLogin.svelte";
+  import CourseView from "./CourseView.svelte";
   import { api, isCommandError, type Account, type Course } from "../lib/api";
   import { errorText } from "../lib/errors";
   import { i18n } from "../lib/i18n/index.svelte";
@@ -10,6 +11,7 @@
   let refreshing = $state(false);
   let expired = $state(false);
   let error = $state<string | null>(null);
+  let opened = $state<Course | null>(null);
 
   const now = Date.now() / 1000;
   const current = $derived(courses.filter((c) => c.enrolled && !(c.endDate && c.endDate < now)));
@@ -67,19 +69,20 @@
   <ul>
     {#each items as course (course.id)}
       <li>
-        <label>
-          <input
-            type="checkbox"
-            checked={course.sync}
-            onchange={() => toggle(course)}
-            aria-label={i18n.t.moodle.sync}
-          />
-          <span class="name">{course.fullName}</span>
+        <input
+          type="checkbox"
+          checked={course.sync}
+          onchange={() => toggle(course)}
+          aria-label={i18n.t.moodle.sync}
+          title={i18n.t.moodle.sync}
+        />
+        <button class="name" onclick={() => (opened = course)}>
+          {course.fullName}
           {#if course.shortName !== course.fullName}
             <span class="muted">{course.shortName}</span>
           {/if}
           {#if !course.visible}<span class="badge">{i18n.t.moodle.hidden}</span>{/if}
-        </label>
+        </button>
       </li>
     {/each}
   </ul>
@@ -87,6 +90,8 @@
 
 {#if !loaded}
   <!-- lädt -->
+{:else if opened && account && !expired}
+  <CourseView course={opened} onback={() => (opened = null)} />
 {:else if !account || expired}
   <MoodleLogin
     url={account?.baseUrl}
@@ -148,22 +153,25 @@
     margin: 0;
     padding: 0;
   }
-  li label {
+  li {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 6px 4px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
     border-radius: 6px;
-    cursor: pointer;
   }
-  li label:hover {
+  li:hover {
     background: var(--hover);
   }
-  .badge {
-    font-size: 0.8em;
-    padding: 0 6px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+  button.name {
+    flex: 1;
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    text-align: left;
+    border: 0;
+    background: none;
+    padding: 6px 4px;
+    cursor: pointer;
   }
 </style>

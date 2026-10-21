@@ -1,10 +1,11 @@
 use tauri::State;
 use tsa_core::{Account, SecretKind, Service, Settings};
+use tsa_moodle::contents::CourseView;
 use tsa_moodle::session::SiteCheck;
 use tsa_moodle::{Course, Session};
 
-use crate::AppState;
 use crate::error::Result;
+use crate::{AppState, media};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings> {
@@ -73,4 +74,15 @@ pub async fn moodle_refresh_courses(state: State<'_, AppState>) -> Result<Vec<Co
 #[tauri::command]
 pub fn moodle_set_course_sync(state: State<AppState>, id: i64, sync: bool) -> Result<()> {
     Ok(Course::set_sync(&state.db, id, sync)?)
+}
+
+/// Zuletzt geladener Stand, sofort und offline verfügbar.
+#[tauri::command]
+pub fn moodle_course(state: State<AppState>, id: i64) -> Result<Option<CourseView>> {
+    Ok(moodle(&state).cached_course(id, &media::urls())?)
+}
+
+#[tauri::command]
+pub async fn moodle_refresh_course(state: State<'_, AppState>, id: i64) -> Result<CourseView> {
+    Ok(moodle(&state).refresh_course(id, &media::urls()).await?)
 }

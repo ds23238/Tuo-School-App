@@ -15,3 +15,6 @@ tauri.workspace = true
 tsa-core.workspace = true
 tauri-plugin-dialog.workspace = true
 tsa-moodle.workspace = true
+tauri-plugin-opener.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["fs"] }

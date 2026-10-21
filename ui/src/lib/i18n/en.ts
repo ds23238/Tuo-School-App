@@ -24,6 +24,17 @@ export const en: Messages = {
     keyringMissing: "The system keyring is not available. Without it, credentials cannot be stored.",
     version: "Version",
   },
+  course: {
+    back: "All courses",
+    loading: "Loading course …",
+    offline: "Offline – as of {date}",
+    section: "Section {n}",
+    openInBrowser: "Open in browser",
+    unavailable: "Not available",
+    hiddenFromStudents: "Hidden from students",
+    completed: "Done",
+    empty: "This course has no content.",
+  },
   service: {
     moodle: "Moodle",
     untis: "WebUntis",

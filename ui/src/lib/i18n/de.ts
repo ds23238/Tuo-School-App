@@ -22,6 +22,17 @@ export const de = {
     keyringMissing: "Der Schlüsselbund des Systems ist nicht erreichbar. Ohne ihn können keine Zugangsdaten gespeichert werden.",
     version: "Version",
   },
+  course: {
+    back: "Alle Kurse",
+    loading: "Kurs wird geladen …",
+    offline: "Offline – Stand vom {date}",
+    section: "Abschnitt {n}",
+    openInBrowser: "Im Browser öffnen",
+    unavailable: "Nicht verfügbar",
+    hiddenFromStudents: "Für Teilnehmende verborgen",
+    completed: "Erledigt",
+    empty: "Dieser Kurs hat keine Inhalte.",
+  },
   service: {
     moodle: "Moodle",
     untis: "WebUntis",
