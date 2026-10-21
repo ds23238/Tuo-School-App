@@ -14,7 +14,22 @@ export const en: Messages = {
   },
   settings: {
     language: "Language",
+    systemLanguage: "System language",
+    syncDir: "Sync folder",
+    change: "Change",
+    accounts: "Accounts",
+    noAccounts: "No accounts connected yet.",
+    signOut: "Sign out",
+    signOutConfirm: "Sign out of this account? Your credentials are removed from the keyring; downloaded files are kept.",
+    keyringMissing: "The system keyring is not available. Without it, credentials cannot be stored.",
     version: "Version",
+  },
+  service: {
+    moodle: "Moodle",
+    untis: "WebUntis",
+  },
+  error: {
+    generic: "Error",
   },
   locale: {
     de: "Deutsch",

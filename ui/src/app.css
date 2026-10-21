@@ -7,6 +7,8 @@
   --text-muted: #5f6672;
   --accent: #2463c7;
   --accent-soft: #e3ecfa;
+  --warning-soft: #fdf1d8;
+  --error-soft: #fbe2e0;
   color-scheme: light dark;
   font-family: system-ui, "Segoe UI", Roboto, Ubuntu, sans-serif;
   font-size: 15px;
@@ -22,6 +24,8 @@
     --text-muted: #9aa1ac;
     --accent: #7aa7f0;
     --accent-soft: #24324a;
+    --warning-soft: #43381f;
+    --error-soft: #4a2826;
   }
 }
 
@@ -30,4 +34,18 @@ body {
   margin: 0;
   background: var(--surface);
   color: var(--text);
+}
+
+button,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+button:hover {
+  background: var(--hover);
 }
