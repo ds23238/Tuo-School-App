@@ -63,9 +63,13 @@ pub struct SiteFunction {
     pub name: String,
 }
 
-/// Kennung, mit der Moodle Auto-Login-Schlüssel herausgibt (nur an Apps,
-/// die sich als Moodle-App ausweisen).
-const USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"), " MoodleMobile");
+const USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"));
+
+/// Auto-Login-Schlüssel gibt Moodle nur an Apps, die sich als Moodle-App
+/// ausweisen. Nur dafür: Moodle Workplace lehnt diese Kennung sonst ab
+/// („Bitte laden Sie die Moodle Workplace App herunter“).
+const APP_USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"), " MoodleMobile");
+const APP_ONLY: &[&str] = &["tool_mobile_get_autologin_key"];
 
 /// HTTP-Client wie ein Browser, mit Cookies für eine Moodle-Sitzung.
 pub(crate) fn browser() -> reqwest::Client {
@@ -120,14 +124,8 @@ pub struct Client {
 
 impl Client {
     pub fn new(base: Url) -> Self {
-        // Moodle gibt Auto-Login-Schlüssel nur an Apps aus, die sich als
-        // Moodle-App ausweisen.
         let http = reqwest::Client::builder()
-            .user_agent(concat!(
-                "TSA-Sync/",
-                env!("CARGO_PKG_VERSION"),
-                " MoodleMobile"
-            ))
+            .user_agent(USER_AGENT)
             .build()
             .expect("HTTP-Client mit Standardeinstellungen");
         Self { http, base }
@@ -221,15 +219,11 @@ impl Client {
             .append_pair("wsfunction", function);
         let mut form: Vec<(&str, &str)> = vec![("wstoken", token)];
         form.extend(params.iter().map(|(k, v)| (*k, v.as_str())));
-        let value: Value = self
-            .http
-            .post(url)
-            .form(&form)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let mut request = self.http.post(url).form(&form);
+        if APP_ONLY.contains(&function) {
+            request = request.header(reqwest::header::USER_AGENT, APP_USER_AGENT);
+        }
+        let value: Value = request.send().await?.error_for_status()?.json().await?;
         if let Some(code) = value.get("exception").and(value.get("errorcode")) {
             let code = code.as_str().unwrap_or_default();
             return Err(match code {
