@@ -11,6 +11,8 @@ base64.workspace = true
 html-escape.workspace = true
 reqwest.workspace = true
 rusqlite.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -18,5 +20,6 @@ tsa-core.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 tokio.workspace = true
 wiremock.workspace = true

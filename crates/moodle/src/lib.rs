@@ -1,11 +1,15 @@
 //! Moodle über die REST-API der Mobile-App (`moodle_mobile_app`).
 
+pub mod assign;
 pub mod client;
 pub mod contents;
 pub mod courses;
 pub mod error;
 pub mod html;
+pub mod pages;
+pub mod paths;
 pub mod session;
+pub mod sync;
 
 pub use client::{Client, PublicConfig, SiteInfo};
 pub use courses::Course;
@@ -28,6 +32,38 @@ const MIGRATIONS: &[&str] = &[
     );",
     "CREATE TABLE moodle_course_contents (
         course_id  INTEGER PRIMARY KEY,
+        json       TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL
+    );",
+    "CREATE TABLE moodle_files (
+        id                  INTEGER PRIMARY KEY,
+        course_id           INTEGER NOT NULL,
+        module_id           INTEGER NOT NULL,
+        remote_path         TEXT NOT NULL,
+        file_url            TEXT NOT NULL,
+        remote_modified     INTEGER,
+        remote_size         INTEGER NOT NULL,
+        target_path         TEXT NOT NULL,
+        local_path          TEXT,
+        local_hash          TEXT,
+        local_mtime         INTEGER,
+        local_size          INTEGER,
+        downloaded_modified INTEGER,
+        downloaded_size     INTEGER,
+        removed             INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (module_id, remote_path)
+    );
+    CREATE INDEX moodle_files_course ON moodle_files (course_id);
+    CREATE TABLE moodle_file_versions (
+        id         INTEGER PRIMARY KEY,
+        file_id    INTEGER NOT NULL REFERENCES moodle_files (id) ON DELETE CASCADE,
+        local_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    );",
+    "ALTER TABLE moodle_courses ADD COLUMN progress REAL;
+    ALTER TABLE moodle_courses ADD COLUMN image_url TEXT;",
+    "CREATE TABLE moodle_pages (
+        module_id  INTEGER PRIMARY KEY,
         json       TEXT NOT NULL,
         fetched_at INTEGER NOT NULL
     );",

@@ -1,7 +1,14 @@
-use tauri::State;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 use tsa_core::{Account, SecretKind, Service, Settings};
+use tsa_moodle::assign::{Assignment, Draft};
 use tsa_moodle::contents::CourseView;
-use tsa_moodle::session::SiteCheck;
+use tsa_moodle::pages::PageContent;
+use tsa_moodle::session::{CourseSync, SiteCheck};
+use tsa_moodle::sync::{CourseFiles, course_dir};
 use tsa_moodle::{Course, Session};
 
 use crate::error::Result;
@@ -61,14 +68,19 @@ pub async fn moodle_login(
         .await?)
 }
 
+fn with_media(courses: Vec<Course>) -> Vec<Course> {
+    let media = media::urls();
+    courses.into_iter().map(|c| c.with_media(&media)).collect()
+}
+
 #[tauri::command]
 pub fn moodle_courses(state: State<AppState>) -> Result<Vec<Course>> {
-    Ok(Course::list(&state.db)?)
+    Ok(with_media(Course::list(&state.db)?))
 }
 
 #[tauri::command]
 pub async fn moodle_refresh_courses(state: State<'_, AppState>) -> Result<Vec<Course>> {
-    Ok(moodle(&state).refresh_courses().await?)
+    Ok(with_media(moodle(&state).refresh_courses().await?))
 }
 
 #[tauri::command]
@@ -77,12 +89,155 @@ pub fn moodle_set_course_sync(state: State<AppState>, id: i64, sync: bool) -> Re
 }
 
 /// Zuletzt geladener Stand, sofort und offline verfügbar.
+fn sync_dir(state: &AppState) -> Result<PathBuf> {
+    Ok(Settings::load(&state.db, &state.default_sync_dir)?.sync_dir)
+}
+
+fn open_path(app: &AppHandle, path: &Path) -> Result<()> {
+    Ok(app
+        .opener()
+        .open_path(path.to_string_lossy(), None::<&str>)?)
+}
+
 #[tauri::command]
-pub fn moodle_course(state: State<AppState>, id: i64) -> Result<Option<CourseView>> {
-    Ok(moodle(&state).cached_course(id, &media::urls())?)
+pub async fn moodle_course(state: State<'_, AppState>, id: i64) -> Result<Option<CourseView>> {
+    let root = sync_dir(&state)?;
+    Ok(moodle(&state)
+        .cached_course(id, &media::urls(), &root)
+        .await?)
 }
 
 #[tauri::command]
 pub async fn moodle_refresh_course(state: State<'_, AppState>, id: i64) -> Result<CourseView> {
-    Ok(moodle(&state).refresh_course(id, &media::urls()).await?)
+    let root = sync_dir(&state)?;
+    Ok(moodle(&state)
+        .refresh_course(id, &media::urls(), &root)
+        .await?)
+}
+
+#[tauri::command]
+pub fn moodle_file_stats(state: State<AppState>) -> Result<HashMap<i64, CourseFiles>> {
+    Ok(moodle(&state).file_stats()?)
+}
+
+/// Synchronisiert alle ausgewählten Kurse.
+#[tauri::command]
+pub async fn moodle_sync(state: State<'_, AppState>) -> Result<Vec<CourseSync>> {
+    let root = sync_dir(&state)?;
+    Ok(moodle(&state).sync_all(&root).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_sync_course(state: State<'_, AppState>, id: i64) -> Result<usize> {
+    let root = sync_dir(&state)?;
+    Ok(moodle(&state).sync_course(id, &root).await?)
+}
+
+/// Öffnet die lokale Kopie; lädt sie vorher, falls nötig.
+#[tauri::command]
+pub async fn moodle_open_file(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<()> {
+    let root = sync_dir(&state)?;
+    let path = moodle(&state).local_file(id, &root).await?;
+    open_path(&app, &path)
+}
+
+/// Holt die neue Version; die bisherige Datei bleibt umbenannt erhalten.
+#[tauri::command]
+pub async fn moodle_update_file(state: State<'_, AppState>, id: i64) -> Result<()> {
+    let root = sync_dir(&state)?;
+    moodle(&state).update_file(id, &root).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn moodle_open_course_folder(app: AppHandle, state: State<AppState>, id: i64) -> Result<()> {
+    let course = Course::list(&state.db)?
+        .into_iter()
+        .find(|c| c.id == id)
+        .ok_or(tsa_moodle::Error::FileNotFound)?;
+    let dir = sync_dir(&state)?.join(course_dir(&course.full_name));
+    std::fs::create_dir_all(&dir).map_err(tsa_moodle::Error::Io)?;
+    open_path(&app, &dir)
+}
+
+/// Öffnet eine Moodle-Seite im Browser, wenn möglich bereits angemeldet.
+#[tauri::command]
+pub async fn moodle_open_in_browser(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<()> {
+    let url = moodle(&state).autologin_url(&url).await?;
+    Ok(app.opener().open_url(url, None::<&str>)?)
+}
+
+#[tauri::command]
+pub async fn moodle_set_completion(
+    state: State<'_, AppState>,
+    module_id: i64,
+    completed: bool,
+) -> Result<()> {
+    Ok(moodle(&state).set_completion(module_id, completed).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_page(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<PageContent> {
+    Ok(moodle(&state)
+        .page_content(course_id, module_id, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_assignment(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<Assignment> {
+    Ok(moodle(&state)
+        .assignment(course_id, module_id, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_save_submission(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+    draft: Draft,
+) -> Result<()> {
+    Ok(moodle(&state)
+        .save_submission(course_id, module_id, draft, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_submit(
+    state: State<'_, AppState>,
+    assign_id: i64,
+    accept_statement: bool,
+) -> Result<()> {
+    Ok(moodle(&state)
+        .submit_for_grading(assign_id, accept_statement)
+        .await?)
+}
+
+/// Öffnet eine abgegebene Datei oder eine Feedback-Datei.
+#[tauri::command]
+pub async fn moodle_open_assignment_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+    feedback: bool,
+    name: String,
+) -> Result<()> {
+    let dir = app.path().app_cache_dir()?.join("assign");
+    let path = moodle(&state)
+        .assignment_file(course_id, module_id, feedback, &name, &dir, &media::urls())
+        .await?;
+    open_path(&app, &path)
 }

@@ -18,6 +18,10 @@ pub enum Error {
     Moodle { code: String, message: String },
     #[error("Unerwartete Antwort von Moodle: {0}")]
     Response(#[from] serde_json::Error),
+    #[error("Datei nicht gefunden")]
+    FileNotFound,
+    #[error("Dateifehler: {0}")]
+    Io(std::io::Error),
     #[error(transparent)]
     Core(#[from] tsa_core::Error),
 }
@@ -35,6 +39,8 @@ impl Error {
             Self::NotSignedIn => "notSignedIn",
             Self::Moodle { .. } => "moodle",
             Self::Response(_) => "response",
+            Self::FileNotFound => "fileNotFound",
+            Self::Io(_) => "io",
             Self::Core(_) => "internal",
         }
     }

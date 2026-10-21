@@ -9,6 +9,7 @@ use tsa_core::Database;
 use url::Url;
 
 use crate::html::{MediaUrls, sanitize};
+use crate::sync::FileState;
 use crate::{Result, plain};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,6 +32,7 @@ pub struct RemoteSection {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RemoteModule {
     pub id: i64,
+    pub instance: Option<i64>,
     pub url: Option<String>,
     pub name: String,
     pub description: Option<String>,
@@ -44,6 +46,11 @@ pub struct RemoteModule {
     pub modplural: String,
     #[serde(default)]
     pub indent: i64,
+    /// Moodle 4+: `content`, `assessment`, `communication`, `collaboration`, …
+    pub purpose: Option<String>,
+    /// 0 = kein Abschluss, 1 = manuell, 2 = automatisch.
+    #[serde(default)]
+    pub completion: i64,
     pub customdata: Option<String>,
     #[serde(default)]
     pub dates: Vec<RemoteDate>,
@@ -71,9 +78,12 @@ pub struct RemoteContent {
     pub filepath: Option<String>,
     #[serde(default)]
     pub filesize: i64,
-    pub fileurl: String,
+    /// Fehlt bei `type = content`, z. B. der Kapitelstruktur eines Buchs.
+    pub fileurl: Option<String>,
     pub timemodified: Option<i64>,
     pub mimetype: Option<String>,
+    /// Inhalt bei `type = content`.
+    pub content: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -103,11 +113,15 @@ pub struct SectionView {
 #[serde(rename_all = "camelCase")]
 pub struct ModuleView {
     pub id: i64,
+    /// Kennung der Aktivität selbst (z. B. der Aufgabe), nicht des Kursmoduls.
+    pub instance: Option<i64>,
     pub name: String,
     /// Moodle-Modulname, z. B. `resource`, `assign`, `label`.
     pub kind: String,
     /// Bezeichnung des Typs in der Sprache der Seite, z. B. „Dateien“.
     pub kind_name: String,
+    /// Moodle-Zweck für die Farbe, `other`, wenn unbekannt.
+    pub purpose: String,
     pub description: Option<String>,
     pub icon: Option<String>,
     /// Ansicht im Browser.
@@ -121,6 +135,8 @@ pub struct ModuleView {
     pub dates: Vec<DateView>,
     /// `None`, wenn die Aktivität keinen Abschluss verfolgt.
     pub completed: Option<bool>,
+    /// Abschluss kann von Hand gesetzt werden.
+    pub manual_completion: bool,
     pub files: Vec<FileView>,
     /// Inhalt eines Unterabschnitts.
     pub subsection: Option<Box<SectionView>>,
@@ -136,6 +152,8 @@ pub struct DateView {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileView {
+    /// Zustand im Sync-Ordner; `None` bei Modulen ohne Sync (z. B. Seiten).
+    pub state: Option<FileState>,
     pub name: String,
     /// Ordnerpfad innerhalb des Moduls, `/` für die oberste Ebene.
     pub path: String,
@@ -184,6 +202,7 @@ pub fn clear(db: &Database) -> Result<()> {
 struct Builder<'a> {
     base: &'a Url,
     media: &'a MediaUrls,
+    states: &'a HashMap<(i64, String), FileState>,
 }
 
 impl Builder<'_> {
@@ -225,12 +244,19 @@ impl Builder<'_> {
         let link = (m.modname == "url")
             .then(|| m.contents.iter().find(|c| c.kind == "url"))
             .flatten()
-            .map(|c| c.fileurl.clone());
+            .and_then(|c| c.fileurl.clone());
         let files = m
             .contents
             .iter()
             .filter(|c| c.kind == "file")
             .map(|c| FileView {
+                state: self
+                    .states
+                    .get(&(
+                        m.id,
+                        format!("{}{}", c.filepath.as_deref().unwrap_or("/"), c.filename),
+                    ))
+                    .copied(),
                 name: c.filename.clone(),
                 path: c.filepath.clone().unwrap_or_else(|| "/".into()),
                 size: c.filesize,
@@ -241,9 +267,11 @@ impl Builder<'_> {
         let icon = Url::parse(&m.modicon).ok().map(|u| self.media.url(&u));
         ModuleView {
             id: m.id,
+            instance: m.instance,
             name: plain(&m.name),
             kind: m.modname,
             kind_name: plain(&m.modplural),
+            purpose: m.purpose.unwrap_or_else(|| "other".into()),
             description: self.optional_html(m.description.as_deref()),
             icon,
             url: m.url,
@@ -261,6 +289,7 @@ impl Builder<'_> {
                 })
                 .collect(),
             completed: m.completiondata.map(|c| c.state > 0),
+            manual_completion: m.completion == 1,
             files,
             subsection,
         }
@@ -283,8 +312,13 @@ pub fn view(
     fetched_at: i64,
     base: &Url,
     media: &MediaUrls,
+    states: &HashMap<(i64, String), FileState>,
 ) -> CourseView {
-    let builder = Builder { base, media };
+    let builder = Builder {
+        base,
+        media,
+        states,
+    };
     let (nested, top): (Vec<_>, Vec<_>) = sections
         .into_iter()
         .partition(|s| s.component.as_deref() == Some("mod_subsection"));
@@ -344,7 +378,7 @@ mod tests {
     #[test]
     fn builds_view() {
         let base = Url::parse("https://m.example/").unwrap();
-        let v = view(7, sample(), 42, &base, &media());
+        let v = view(7, sample(), 42, &base, &media(), &HashMap::new());
         assert_eq!(v.sections.len(), 1, "Unterabschnitt nicht oben");
         let s = &v.sections[0];
         assert_eq!(s.summary, "<p>Hallo</p>");
@@ -373,7 +407,7 @@ mod tests {
         let mut sections = sample();
         sections[0].modules.retain(|m| m.modname != "subsection");
         let base = Url::parse("https://m.example/").unwrap();
-        let v = view(7, sections, 42, &base, &media());
+        let v = view(7, sections, 42, &base, &media(), &HashMap::new());
         assert_eq!(v.sections.len(), 2);
     }
 

@@ -45,6 +45,19 @@ pub fn run() {
             commands::moodle_set_course_sync,
             commands::moodle_course,
             commands::moodle_refresh_course,
+            commands::moodle_file_stats,
+            commands::moodle_sync,
+            commands::moodle_sync_course,
+            commands::moodle_open_file,
+            commands::moodle_update_file,
+            commands::moodle_open_course_folder,
+            commands::moodle_open_in_browser,
+            commands::moodle_set_completion,
+            commands::moodle_page,
+            commands::moodle_assignment,
+            commands::moodle_save_submission,
+            commands::moodle_submit,
+            commands::moodle_open_assignment_file,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri-Anwendung konnte nicht gestartet werden");

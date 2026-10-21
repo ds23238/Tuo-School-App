@@ -33,8 +33,34 @@ impl MediaUrls {
     }
 }
 
-/// Entfernt alles Ausführbare (Skripte, Event-Handler, iframes, Styles) und
-/// leitet Bilder über [`MediaUrls`] um. Links werden absolute Adressen.
+/// Style-Eigenschaften, die Moodle-Inhalte für ihr Layout brauchen. Farben
+/// fehlen absichtlich: Sie passen oft nicht zum dunklen Modus.
+const STYLE_PROPERTIES: &[&str] = &[
+    "width",
+    "height",
+    "max-width",
+    "max-height",
+    "min-width",
+    "float",
+    "clear",
+    "text-align",
+    "vertical-align",
+    "margin",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "margin-bottom",
+    "padding",
+    "padding-left",
+    "padding-right",
+    "font-weight",
+    "font-style",
+    "text-decoration",
+];
+
+/// Entfernt alles Ausführbare (Skripte, Event-Handler, iframes) und alle
+/// Styles außer Layout-Angaben; leitet Bilder über [`MediaUrls`] um. Links
+/// werden absolute Adressen.
 pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
     let (base_for_images, media_for_images) = (base.clone(), media.clone());
     let schemes: HashSet<&str> = ["http", "https", "mailto", "tel", media.scheme].into();
@@ -42,6 +68,8 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         .url_schemes(schemes)
         .url_relative(UrlRelative::RewriteWithBase(base.clone()))
         .link_rel(Some("noopener noreferrer"))
+        .add_generic_attributes(["style"])
+        .filter_style_properties(STYLE_PROPERTIES.iter().copied().collect())
         .attribute_filter(move |element, attribute, value| {
             if element == "img" && attribute == "src" {
                 // Nicht ladbare Bildquellen fallen weg statt kaputt zu laden.
@@ -79,19 +107,26 @@ mod tests {
     #[test]
     fn strips_active_content() {
         let out = clean(
-            r#"<p onclick="x()" style="color:red">Hi<script>alert(1)</script></p><iframe src="https://evil"></iframe>"#,
+            r#"<p onclick="x()">Hi<script>alert(1)</script></p><iframe src="https://evil"></iframe>"#,
         );
         assert_eq!(out, "<p>Hi</p>");
     }
 
     #[test]
+    fn keeps_layout_styles() {
+        let out = clean(r#"<p style="text-align: center; color: red; position: fixed">x</p>"#);
+        assert_eq!(out, r#"<p style="text-align:center">x</p>"#);
+    }
+
+    #[test]
     fn rewrites_images() {
-        let out = clean(r#"<img src="/pluginfile.php/1/a.png" alt="A" width="10">"#);
+        let out =
+            clean(r#"<img src="/pluginfile.php/1/a.png" alt="A" width="10" style="width: 24px">"#);
         let original = Url::parse("https://moodle.example/pluginfile.php/1/a.png").unwrap();
         assert_eq!(
             out,
             format!(
-                r#"<img src="{}" alt="A" width="10">"#,
+                r#"<img src="{}" alt="A" width="10" style="width:24px">"#,
                 media().url(&original)
             )
         );

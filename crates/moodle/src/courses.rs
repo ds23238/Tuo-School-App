@@ -19,6 +19,12 @@ pub struct Course {
     pub start_date: Option<i64>,
     pub end_date: Option<i64>,
     pub last_access: Option<i64>,
+    /// Fortschritt in Prozent, falls der Kurs Abschlüsse verfolgt.
+    pub progress: Option<f64>,
+    /// Kursbild als Medien-Adresse der App, siehe [`Course::with_media`].
+    pub image: Option<String>,
+    #[serde(skip)]
+    pub image_url: Option<String>,
 }
 
 /// Kurs aus `core_enrol_get_users_courses`.
@@ -33,6 +39,15 @@ pub struct RemoteCourse {
     pub startdate: Option<i64>,
     pub enddate: Option<i64>,
     pub lastaccess: Option<i64>,
+    pub progress: Option<f64>,
+    #[serde(default)]
+    pub overviewfiles: Vec<OverviewFile>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct OverviewFile {
+    pub fileurl: String,
+    pub mimetype: Option<String>,
 }
 
 fn visible() -> i64 {
@@ -56,7 +71,20 @@ impl Course {
             start_date: row.get("start_date")?,
             end_date: row.get("end_date")?,
             last_access: row.get("last_access")?,
+            progress: row.get("progress")?,
+            image: None,
+            image_url: row.get("image_url")?,
         })
+    }
+
+    /// Setzt [`Course::image`] auf eine von der App auslieferbare Adresse.
+    pub fn with_media(mut self, media: &crate::html::MediaUrls) -> Self {
+        self.image = self
+            .image_url
+            .as_deref()
+            .and_then(|u| url::Url::parse(u).ok())
+            .map(|u| media.url(&u));
+        self
     }
 
     pub fn list(db: &Database) -> Result<Vec<Self>> {
@@ -78,8 +106,9 @@ impl Course {
         for c in remote {
             tx.execute(
                 "INSERT INTO moodle_courses
-                     (id, fullname, shortname, visible, enrolled, start_date, end_date, last_access)
-                 VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7)
+                     (id, fullname, shortname, visible, enrolled, start_date, end_date,
+                      last_access, progress, image_url)
+                 VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9)
                  ON CONFLICT (id) DO UPDATE SET
                      fullname = excluded.fullname,
                      shortname = excluded.shortname,
@@ -87,7 +116,9 @@ impl Course {
                      enrolled = 1,
                      start_date = excluded.start_date,
                      end_date = excluded.end_date,
-                     last_access = excluded.last_access",
+                     last_access = excluded.last_access,
+                     progress = excluded.progress,
+                     image_url = excluded.image_url",
                 (
                     c.id,
                     crate::plain(c.displayname.as_ref().unwrap_or(&c.fullname)),
@@ -96,6 +127,15 @@ impl Course {
                     date(c.startdate),
                     date(c.enddate),
                     date(c.lastaccess),
+                    c.progress,
+                    c.overviewfiles
+                        .iter()
+                        .find(|f| {
+                            f.mimetype
+                                .as_deref()
+                                .is_some_and(|m| m.starts_with("image/"))
+                        })
+                        .map(|f| f.fileurl.clone()),
                 ),
             )?;
         }
@@ -141,6 +181,8 @@ mod tests {
             startdate: Some(0),
             enddate: Some(1_700_000_000),
             lastaccess: None,
+            progress: Some(12.5),
+            overviewfiles: vec![],
         }
     }
 

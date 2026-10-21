@@ -9,6 +9,8 @@ const KEYRING_SERVICE: &str = "TSA-Sync";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecretKind {
     Token,
+    /// Moodle: berechtigt zum Anfordern von Auto-Login-Schlüsseln.
+    PrivateToken,
     Password,
 }
 
@@ -16,6 +18,7 @@ impl SecretKind {
     fn as_str(self) -> &'static str {
         match self {
             Self::Token => "token",
+            Self::PrivateToken => "private-token",
             Self::Password => "password",
         }
     }
@@ -35,6 +38,7 @@ pub trait SecretStore: Send + Sync {
 
     fn delete_all(&self, service: Service) -> Result<()> {
         self.delete(service, SecretKind::Token)?;
+        self.delete(service, SecretKind::PrivateToken)?;
         self.delete(service, SecretKind::Password)
     }
 }
