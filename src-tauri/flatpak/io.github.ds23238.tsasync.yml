@@ -1,0 +1,29 @@
+id: io.github.ds23238.tsasync
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: tsa-sync
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --share=network
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+modules:
+  - name: tsa-sync
+    buildsystem: simple
+    sources:
+      - type: file
+        path: tsa-sync.deb
+    build-commands:
+      - ar -x tsa-sync.deb
+      - tar -xf data.tar.gz
+      - install -Dm755 usr/bin/tsa-sync /app/bin/tsa-sync
+      - install -Dm644 usr/share/applications/TSA-Sync.desktop /app/share/applications/${FLATPAK_ID}.desktop
+      - sed -i "s/^Icon=.*/Icon=${FLATPAK_ID}/" /app/share/applications/${FLATPAK_ID}.desktop
+      - install -Dm644 usr/share/icons/hicolor/32x32/apps/tsa-sync.png /app/share/icons/hicolor/32x32/apps/${FLATPAK_ID}.png
+      - install -Dm644 usr/share/icons/hicolor/128x128/apps/tsa-sync.png /app/share/icons/hicolor/128x128/apps/${FLATPAK_ID}.png
