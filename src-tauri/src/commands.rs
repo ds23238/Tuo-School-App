@@ -266,3 +266,9 @@ pub async fn open_url(app: AppHandle, url: String) -> Result<()> {
 pub fn autostart_supported() -> bool {
     std::env::var_os("FLATPAK_ID").is_none()
 }
+
+/// Die Grafik-Einstellung gibt es nur unter Linux (WebKitGTK).
+#[tauri::command]
+pub fn graphics_configurable() -> bool {
+    cfg!(target_os = "linux")
+}

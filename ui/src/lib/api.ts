@@ -11,6 +11,8 @@ export interface Settings {
   syncEnabled: boolean;
   syncIntervalMinutes: number;
   notifications: boolean;
+  /** Nur Linux: `auto`, `always`, `never`, `compat`. Wirkt nach Neustart. */
+  graphics: string;
 }
 
 export interface SyncStatus {

@@ -5180,6 +5180,7 @@ dependencies = [
  "tokio",
  "tsa-core",
  "tsa-moodle",
+ "webkit2gtk",
 ]
 
 [[package]]

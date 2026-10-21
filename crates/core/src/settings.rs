@@ -18,6 +18,10 @@ pub struct Settings {
     pub sync_interval_minutes: u32,
     /// Systembenachrichtigungen bei neuen Dateien.
     pub notifications: bool,
+    /// Grafikbeschleunigung der Oberfläche (nur Linux): `auto`, `always`,
+    /// `never` oder `compat` (ohne DMA-BUF, hilft bei NVIDIA). Wirkt nach
+    /// einem Neustart.
+    pub graphics: String,
 }
 
 impl Settings {
@@ -28,6 +32,7 @@ impl Settings {
             sync_enabled: true,
             sync_interval_minutes: 30,
             notifications: true,
+            graphics: "auto".into(),
         }
     }
 
@@ -99,6 +104,7 @@ mod tests {
             sync_enabled: false,
             sync_interval_minutes: 60,
             notifications: false,
+            graphics: "never".into(),
         };
         s.save(&db).unwrap();
         assert_eq!(Settings::load(&db, Path::new("/sync")).unwrap(), s);

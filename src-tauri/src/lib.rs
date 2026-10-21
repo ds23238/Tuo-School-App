@@ -1,6 +1,7 @@
 mod background;
 mod commands;
 mod error;
+mod graphics;
 mod launch;
 mod media;
 mod texts;
@@ -25,6 +26,9 @@ pub struct AppState {
 const MINIMIZED: &str = "--minimized";
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    let graphics_mode = graphics::prepare("io.github.ds23238.tsasync");
+
     tauri::Builder::default()
         // Ein zweiter Start holt nur das vorhandene Fenster nach vorne.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -40,7 +44,7 @@ pub fn run() {
         .register_asynchronous_uri_scheme_protocol(media::SCHEME, |ctx, request, responder| {
             media::handle(ctx.app_handle(), request, responder)
         })
-        .setup(|app| {
+        .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Database::open(&data_dir.join("tsa-sync.db"))?;
@@ -67,6 +71,10 @@ pub fn run() {
                 .store(has_tray, Ordering::Relaxed);
             // Das Fenster startet sichtbar: unter Linux reagieren die Buttons der
             // Titelleiste sonst teils nicht mehr, wenn es erst später erscheint.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                graphics::apply(&window, &graphics_mode);
+            }
             let minimized = std::env::args().any(|a| a == MINIMIZED);
             if minimized && has_tray {
                 if let Some(window) = app.get_webview_window("main") {
@@ -93,6 +101,7 @@ pub fn run() {
             commands::check_keyring,
             commands::open_url,
             commands::autostart_supported,
+            commands::graphics_configurable,
             commands::moodle_check_site,
             commands::moodle_login,
             commands::moodle_courses,

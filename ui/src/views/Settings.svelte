@@ -14,6 +14,8 @@
   let accounts = $state<Account[]>([]);
   let keyringOk = $state(true);
   let autostart = $state<boolean | null>(null);
+  let graphicsConfigurable = $state(false);
+  invoke<boolean>("graphics_configurable").then((v) => (graphicsConfigurable = v));
   const intervals = [15, 30, 60, 120, 240];
 
   function intervalLabel(minutes: number): string {
@@ -99,6 +101,20 @@
           {/each}
         </select>
       </div>
+      {#if graphicsConfigurable}
+        <div class="row">
+          <div>
+            <label for="graphics">{i18n.t.settings.graphics}</label>
+            <div class="muted small">{i18n.t.settings.graphicsHint}</div>
+          </div>
+          <select id="graphics" value={settings.graphics} onchange={(e) => update({ graphics: e.currentTarget.value })}>
+            <option value="auto">{i18n.t.settings.graphicsAuto}</option>
+            <option value="always">{i18n.t.settings.graphicsAlways}</option>
+            <option value="never">{i18n.t.settings.graphicsNever}</option>
+            <option value="compat">{i18n.t.settings.graphicsCompat}</option>
+          </select>
+        </div>
+      {/if}
       <div class="row">
         <span>{i18n.t.settings.syncDir}</span>
         <div class="value">

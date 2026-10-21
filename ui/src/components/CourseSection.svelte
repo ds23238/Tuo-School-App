@@ -49,6 +49,9 @@
   section {
     padding: 18px 22px;
     scroll-margin-top: 16px;
+    /* Abschnitte außerhalb des sichtbaren Bereichs nicht zeichnen. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 600px;
   }
   section.nested {
     margin: 12px 0 4px;
