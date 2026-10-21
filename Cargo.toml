@@ -10,9 +10,15 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 tsa-core = { path = "crates/core" }
+tsa-moodle = { path = "crates/moodle" }
 keyring = { version = "3.6", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 tempfile = "3"
+html-escape = "0.2"
+reqwest = { version = "0.13", features = ["json", "form"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+url = "2"
+wiremock = "0.6"
 thiserror = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }

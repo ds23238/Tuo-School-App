@@ -49,3 +49,43 @@ select {
 button:hover {
   background: var(--hover);
 }
+
+input[type="text"],
+input[type="url"],
+input[type="password"] {
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
+
+.notice {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 0 0 16px;
+}
+
+.notice.warning {
+  background: var(--warning-soft);
+}
+
+.notice.error {
+  background: var(--error-soft);
+}
+
+.muted {
+  color: var(--text-muted);
+}
