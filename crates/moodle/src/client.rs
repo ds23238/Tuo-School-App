@@ -41,11 +41,24 @@ impl PublicConfig {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Tokens {
+    pub token: String,
+    /// Nur bei Login über HTTPS; nötig für Auto-Login im Browser.
+    pub private_token: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SiteInfo {
     pub userid: i64,
     pub fullname: String,
     pub sitename: String,
+}
+
+/// Moodle-Meldungen enthalten manchmal HTML (`<p>…</p>`).
+fn text_only(message: &str) -> String {
+    let spaced = message.replace("</p>", "</p> ");
+    crate::plain(&ammonia::Builder::empty().clean(&spaced).to_string())
 }
 
 /// Bringt eine eingegebene Adresse in die Form `https://host/pfad/`.
@@ -123,11 +136,12 @@ impl Client {
         serde_json::from_value(data).map_err(|_| Error::NotMoodle)
     }
 
-    /// Meldet an und liefert das Token.
-    pub async fn login(&self, username: &str, password: &str) -> Result<String> {
+    /// Meldet an und liefert Token und, falls vorhanden, Private-Token.
+    pub async fn login(&self, username: &str, password: &str) -> Result<Tokens> {
         #[derive(Deserialize)]
         struct TokenResponse {
             token: Option<String>,
+            privatetoken: Option<String>,
             errorcode: Option<String>,
             error: Option<String>,
         }
@@ -146,8 +160,13 @@ impl Client {
             .await?;
         match response {
             TokenResponse {
-                token: Some(token), ..
-            } => Ok(token),
+                token: Some(token),
+                privatetoken,
+                ..
+            } => Ok(Tokens {
+                token,
+                private_token: privatetoken,
+            }),
             TokenResponse {
                 errorcode: Some(code),
                 ..
@@ -156,7 +175,7 @@ impl Client {
                 errorcode, error, ..
             } => Err(Error::Moodle {
                 code: errorcode.unwrap_or_default(),
-                message: error.unwrap_or_default(),
+                message: text_only(&error.unwrap_or_default()),
             }),
         }
     }
@@ -190,11 +209,124 @@ impl Client {
                 "invalidtoken" => Error::InvalidToken,
                 _ => Error::Moodle {
                     code: code.to_owned(),
-                    message: value["message"].as_str().unwrap_or_default().to_owned(),
+                    message: text_only(value["message"].as_str().unwrap_or_default()),
                 },
             });
         }
         Ok(serde_json::from_value(value)?)
+    }
+
+    /// Lädt eine Datei; liefert Inhalt und Content-Type.
+    pub async fn download(&self, url: Url) -> Result<(Vec<u8>, Option<String>)> {
+        let response = self.http.get(url).send().await?.error_for_status()?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        Ok((response.bytes().await?.to_vec(), content_type))
+    }
+
+    /// Lädt eine Datei direkt an `path`; erst als `.part`, damit nie eine
+    /// halbe Datei am Ziel liegt.
+    pub async fn download_to(&self, url: Url, path: &std::path::Path) -> Result<()> {
+        use tokio::io::AsyncWriteExt;
+        let mut response = self.http.get(url).send().await?.error_for_status()?;
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(Error::Io)?;
+        }
+        let mut part = path.as_os_str().to_owned();
+        part.push(".part");
+        let part = std::path::PathBuf::from(part);
+        let mut file = tokio::fs::File::create(&part).await.map_err(Error::Io)?;
+        while let Some(chunk) = response.chunk().await? {
+            file.write_all(&chunk).await.map_err(Error::Io)?;
+        }
+        file.flush().await.map_err(Error::Io)?;
+        drop(file);
+        tokio::fs::rename(&part, path).await.map_err(Error::Io)
+    }
+
+    /// Lädt eine Datei in einen Entwurfsbereich; `item_id` 0 legt einen neuen
+    /// an. Liefert die Kennung des Bereichs für weitere Dateien.
+    pub async fn upload(
+        &self,
+        token: &str,
+        item_id: i64,
+        filename: &str,
+        bytes: Vec<u8>,
+    ) -> Result<i64> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum UploadResponse {
+            Ok(Vec<Uploaded>),
+            Err {
+                error: String,
+                errorcode: Option<String>,
+            },
+        }
+        #[derive(Deserialize)]
+        struct Uploaded {
+            itemid: i64,
+        }
+        let part = reqwest::multipart::Part::bytes(bytes).file_name(filename.to_owned());
+        let form = reqwest::multipart::Form::new()
+            .text("token", token.to_owned())
+            .text("filearea", "draft")
+            .text("itemid", item_id.to_string())
+            .part("file_1", part);
+        let response: UploadResponse = self
+            .http
+            .post(self.url("webservice/upload.php"))
+            .multipart(form)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        match response {
+            UploadResponse::Ok(files) => {
+                files
+                    .first()
+                    .map(|f| f.itemid)
+                    .ok_or_else(|| Error::Moodle {
+                        code: "upload".into(),
+                        message: "Leere Antwort beim Hochladen".into(),
+                    })
+            }
+            UploadResponse::Err { errorcode, .. }
+                if errorcode.as_deref() == Some("invalidtoken") =>
+            {
+                Err(Error::InvalidToken)
+            }
+            UploadResponse::Err { error, errorcode } => Err(Error::Moodle {
+                code: errorcode.unwrap_or_default(),
+                message: error,
+            }),
+        }
+    }
+
+    /// Macht eine Datei-Adresse der Seite mit dem Token abrufbar:
+    /// `pluginfile.php` braucht dafür den Webservice-Pfad. Fremde Adressen
+    /// bleiben unverändert und bekommen kein Token.
+    pub fn authorize(&self, url: &Url, token: &str) -> Url {
+        let same_site =
+            url.origin() == self.base.origin() && url.path().starts_with(self.base.path());
+        if !same_site {
+            return url.clone();
+        }
+        let mut url = url.clone();
+        let relative = url.path()[self.base.path().len()..].to_owned();
+        if let Some(rest) = relative.strip_prefix("pluginfile.php/") {
+            url.set_path(&format!(
+                "{}webservice/pluginfile.php/{rest}",
+                self.base.path()
+            ));
+        }
+        if relative.contains("pluginfile.php/") {
+            url.query_pairs_mut().append_pair("token", token);
+        }
+        url
     }
 
     pub async fn site_info(&self, token: &str) -> Result<SiteInfo> {
@@ -225,6 +357,37 @@ mod tests {
         ];
         for (input, expected) in cases {
             assert_eq!(normalize_url(input).unwrap().as_str(), expected, "{input}");
+        }
+    }
+
+    #[test]
+    fn authorize() {
+        let client = Client::new(Url::parse("https://e.org/moodle/").unwrap());
+        let cases = [
+            (
+                "https://e.org/moodle/pluginfile.php/1/a.png",
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.png?token=T",
+            ),
+            (
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.pdf?forcedownload=1",
+                "https://e.org/moodle/webservice/pluginfile.php/1/a.pdf?forcedownload=1&token=T",
+            ),
+            (
+                "https://e.org/moodle/theme/image.php/boost/f/pdf",
+                "https://e.org/moodle/theme/image.php/boost/f/pdf",
+            ),
+            (
+                "https://e.org/other/pluginfile.php/1/a.png",
+                "https://e.org/other/pluginfile.php/1/a.png",
+            ),
+            (
+                "https://evil.example/pluginfile.php/1/a",
+                "https://evil.example/pluginfile.php/1/a",
+            ),
+        ];
+        for (input, expected) in cases {
+            let url = Url::parse(input).unwrap();
+            assert_eq!(client.authorize(&url, "T").as_str(), expected, "{input}");
         }
     }
 

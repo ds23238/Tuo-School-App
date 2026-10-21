@@ -1,5 +1,7 @@
 mod commands;
 mod error;
+mod launch;
+mod media;
 
 use std::path::PathBuf;
 
@@ -15,6 +17,10 @@ pub struct AppState {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol(media::SCHEME, |ctx, request, responder| {
+            media::handle(ctx.app_handle(), request, responder)
+        })
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -33,11 +39,27 @@ pub fn run() {
             commands::list_accounts,
             commands::remove_account,
             commands::check_keyring,
+            commands::open_url,
             commands::moodle_check_site,
             commands::moodle_login,
             commands::moodle_courses,
             commands::moodle_refresh_courses,
             commands::moodle_set_course_sync,
+            commands::moodle_course,
+            commands::moodle_refresh_course,
+            commands::moodle_file_stats,
+            commands::moodle_sync,
+            commands::moodle_sync_course,
+            commands::moodle_open_file,
+            commands::moodle_update_file,
+            commands::moodle_open_course_folder,
+            commands::moodle_open_in_browser,
+            commands::moodle_set_completion,
+            commands::moodle_page,
+            commands::moodle_assignment,
+            commands::moodle_save_submission,
+            commands::moodle_submit,
+            commands::moodle_open_assignment_file,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri-Anwendung konnte nicht gestartet werden");

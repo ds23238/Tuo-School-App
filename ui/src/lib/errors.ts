@@ -7,6 +7,6 @@ export function errorText(e: unknown): string {
   const errors: Record<string, string> = i18n.t.error;
   const text = errors[e.code];
   if (!text) return `${i18n.t.error.generic}: ${e.message}`;
-  // Moodle-Meldungen sind schon für Menschen geschrieben.
-  return e.code === "moodle" ? `${text}: ${e.message}` : text;
+  // Diese Meldungen sind schon für Menschen geschrieben und nennen den Grund.
+  return ["moodle", "open", "io"].includes(e.code) ? `${text}: ${e.message}` : text;
 }

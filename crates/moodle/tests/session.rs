@@ -228,3 +228,144 @@ async fn live() {
     }
     assert!(!courses.is_empty());
 }
+
+async fn courses(server: &MockServer, token: &str) {
+    ws(
+        server,
+        "core_enrol_get_users_courses",
+        token,
+        json!([{"id": 3, "fullname": "Bio 10b", "shortname": "B", "visible": 1}]),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn sync_downloads_with_token() {
+    let server = site(json!({})).await;
+    let (db, secrets) = signed_in(&server, false).await;
+    site_info(&server, "old").await;
+    courses(&server, "old").await;
+    let session = Session::new(&db, &secrets);
+    session.refresh_courses().await.unwrap();
+    tsa_moodle::Course::set_sync(&db, 3, true).unwrap();
+    let file_url = format!(
+        "{}/webservice/pluginfile.php/1/mod_resource/content/1/Blatt.pdf",
+        server.uri()
+    );
+    ws(
+        &server,
+        "core_course_get_contents",
+        "old",
+        json!([{"id": 1, "name": "Thema 1", "section": 1, "modules": [
+            {"id": 10, "name": "Blatt", "modname": "resource", "contents": [
+                {"type": "file", "filename": "Blatt.pdf", "filepath": "/", "filesize": 4,
+                 "fileurl": file_url, "timemodified": 5}]}]}]),
+    )
+    .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/webservice/pluginfile.php/1/mod_resource/content/1/Blatt.pdf",
+        ))
+        .and(query_param("token", "old"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("%PDF"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let result = session.sync_all(dir.path()).await.unwrap();
+    assert_eq!(result[0].downloaded, 1, "{result:?}");
+    let file = dir.path().join("Bio 10b/Thema 1/Blatt.pdf");
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "%PDF");
+    // Zweiter Lauf lädt nichts erneut (expect(1) oben).
+    assert_eq!(session.sync_all(dir.path()).await.unwrap()[0].downloaded, 0);
+}
+
+#[tokio::test]
+async fn save_submission_reuploads_kept_files() {
+    let server = site(json!({})).await;
+    let (db, secrets) = signed_in(&server, false).await;
+    let media = tsa_moodle::html::MediaUrls {
+        prefix: "media://localhost/".into(),
+        scheme: "media",
+    };
+    ws(
+        &server,
+        "mod_assign_get_assignments",
+        "old",
+        json!({"courses": [{"assignments": [{"id": 5, "cmid": 50, "name": "Protokoll",
+        "configs": [
+            {"plugin": "file", "subtype": "assignsubmission", "name": "enabled", "value": "1"},
+            {"plugin": "onlinetext", "subtype": "assignsubmission", "name": "enabled", "value": "1"}
+        ]}]}]}),
+    )
+    .await;
+    let old_file = format!(
+        "{}/webservice/pluginfile.php/9/assignsubmission_file/submission_files/1/alt.pdf",
+        server.uri()
+    );
+    ws(
+        &server,
+        "mod_assign_get_submission_status",
+        "old",
+        json!({"lastattempt": {"submission": {"status": "draft", "plugins": [
+            {"type": "file", "fileareas": [{"files": [
+                {"filename": "alt.pdf", "filesize": 3, "fileurl": old_file},
+                {"filename": "weg.pdf", "filesize": 3, "fileurl": old_file}]}]}
+        ]}, "canedit": true, "cansubmit": true}}),
+    )
+    .await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/webservice/pluginfile.php/9/assignsubmission_file/submission_files/1/alt.pdf",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_string("alt"))
+        .mount(&server)
+        .await;
+    ws(
+        &server,
+        "core_files_get_unused_draft_itemid",
+        "old",
+        json!({"itemid": 88, "warnings": []}),
+    )
+    .await;
+    Mock::given(method("POST"))
+        .and(path("/webservice/upload.php"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"itemid": 77}])))
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/webservice/rest/server.php"))
+        .and(query_param("wsfunction", "mod_assign_save_submission"))
+        .and(body_string_contains("files_filemanager%5D=77"))
+        .and(body_string_contains("%3Cp%3EHallo%3C%2Fp%3E"))
+        .and(body_string_contains("onlinetext_editor%5D%5Bitemid%5D=88"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let neu = dir.path().join("neu.txt");
+    std::fs::write(&neu, "neu").unwrap();
+    let a = Session::new(&db, &secrets)
+        .assignment(3, 50, &media)
+        .await
+        .unwrap();
+    assert_eq!(a.files.len(), 2);
+    assert!(a.can_edit && a.text_submission && a.file_submission.is_some());
+    Session::new(&db, &secrets)
+        .save_submission(
+            3,
+            50,
+            tsa_moodle::assign::Draft {
+                keep: vec!["alt.pdf".into()],
+                add: vec![neu],
+                text: Some("Hallo".into()),
+            },
+            &media,
+        )
+        .await
+        .unwrap();
+}

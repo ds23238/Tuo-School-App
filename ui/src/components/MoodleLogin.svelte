@@ -44,13 +44,16 @@
   }
 </script>
 
-<form onsubmit={submit}>
-  <h2>{i18n.t.moodle.signIn}</h2>
+<form class="card" onsubmit={submit}>
+  <div>
+    <h2>{i18n.t.moodle.signIn}</h2>
+    <p class="muted small">{i18n.t.moodle.signInHint}</p>
+  </div>
   {#if notice}<p class="notice warning">{notice}</p>{/if}
   {#if error}<p class="notice error">{error}</p>{/if}
 
   <label>
-    {i18n.t.moodle.url}
+    <span>{i18n.t.moodle.url}</span>
     <!-- svelte-ignore a11y_autofocus -->
     <input
       type="text"
@@ -66,12 +69,12 @@
   {#if ssoOnly}<p class="notice warning">{i18n.t.moodle.ssoHint}</p>{/if}
 
   <label>
-    {i18n.t.moodle.username}
+    <span>{i18n.t.moodle.username}</span>
     <input type="text" bind:value={username} required autocomplete="username" />
   </label>
 
   <label>
-    {i18n.t.moodle.password}
+    <span>{i18n.t.moodle.password}</span>
     <input type="password" bind:value={password} required autocomplete="current-password" />
   </label>
 
@@ -83,7 +86,7 @@
     </span>
   </label>
 
-  <button class="primary" type="submit" disabled={busy}>
+  <button class="btn primary" type="submit" disabled={busy}>
     {busy ? i18n.t.moodle.signingIn : i18n.t.moodle.submit}
   </button>
 </form>
@@ -92,27 +95,34 @@
   form {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    max-width: 420px;
+    gap: 16px;
+    max-width: 440px;
+    padding: 28px;
   }
   h2 {
-    margin: 0;
-    font-size: 1.1rem;
+    font-size: 20px;
+  }
+  p {
+    margin: 4px 0 0;
   }
   label {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
   }
   label.check {
     flex-direction: row;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
+    font-weight: 400;
   }
   small {
     display: block;
   }
   button {
     align-self: flex-start;
+    min-width: 120px;
   }
 </style>
