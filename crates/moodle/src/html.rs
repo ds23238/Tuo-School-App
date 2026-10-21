@@ -69,9 +69,21 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         .url_relative(UrlRelative::RewriteWithBase(base.clone()))
         .link_rel(Some("noopener noreferrer"))
         .add_generic_attributes(["style"])
+        .add_tags(["video", "audio", "source", "track"])
+        .add_tag_attributes(
+            "video",
+            ["controls", "width", "height", "poster", "preload"],
+        )
+        .add_tag_attributes("audio", ["controls", "preload"])
+        .add_tag_attributes("source", ["src", "type"])
+        .add_tag_attributes("track", ["src", "kind", "srclang", "label"])
         .filter_style_properties(STYLE_PROPERTIES.iter().copied().collect())
         .attribute_filter(move |element, attribute, value| {
-            if element == "img" && attribute == "src" {
+            let media_src = matches!(
+                (element, attribute),
+                ("img" | "source" | "video" | "audio" | "track", "src") | ("video", "poster")
+            );
+            if media_src {
                 // Nicht ladbare Bildquellen fallen weg statt kaputt zu laden.
                 return base_for_images
                     .join(value)
@@ -132,6 +144,18 @@ mod tests {
         );
         let path = media().url(&original).replace("media://localhost", "");
         assert_eq!(MediaUrls::decode(&path), Some(original));
+    }
+
+    #[test]
+    fn keeps_video() {
+        let out = clean(
+            r#"<video controls="true" data-setup="{}"><source src="/pluginfile.php/1/v.mp4" type="video/mp4">/pluginfile.php/1/v.mp4</video>"#,
+        );
+        assert!(
+            out.starts_with(r#"<video controls="true"><source src="media://localhost/"#),
+            "{out}"
+        );
+        assert!(out.contains(r#"type="video/mp4""#));
     }
 
     #[test]

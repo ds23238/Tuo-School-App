@@ -55,6 +55,12 @@ pub struct SiteInfo {
     pub sitename: String,
 }
 
+/// Moodle-Meldungen enthalten manchmal HTML (`<p>…</p>`).
+fn text_only(message: &str) -> String {
+    let spaced = message.replace("</p>", "</p> ");
+    crate::plain(&ammonia::Builder::empty().clean(&spaced).to_string())
+}
+
 /// Bringt eine eingegebene Adresse in die Form `https://host/pfad/`.
 pub fn normalize_url(input: &str) -> Result<Url> {
     let input = input.trim();
@@ -169,7 +175,7 @@ impl Client {
                 errorcode, error, ..
             } => Err(Error::Moodle {
                 code: errorcode.unwrap_or_default(),
-                message: error.unwrap_or_default(),
+                message: text_only(&error.unwrap_or_default()),
             }),
         }
     }
@@ -203,7 +209,7 @@ impl Client {
                 "invalidtoken" => Error::InvalidToken,
                 _ => Error::Moodle {
                     code: code.to_owned(),
-                    message: value["message"].as_str().unwrap_or_default().to_owned(),
+                    message: text_only(value["message"].as_str().unwrap_or_default()),
                 },
             });
         }

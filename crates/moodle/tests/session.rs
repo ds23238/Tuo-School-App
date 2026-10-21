@@ -322,6 +322,13 @@ async fn save_submission_reuploads_kept_files() {
         .respond_with(ResponseTemplate::new(200).set_body_string("alt"))
         .mount(&server)
         .await;
+    ws(
+        &server,
+        "core_files_get_unused_draft_itemid",
+        "old",
+        json!({"itemid": 88, "warnings": []}),
+    )
+    .await;
     Mock::given(method("POST"))
         .and(path("/webservice/upload.php"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"itemid": 77}])))
@@ -333,6 +340,7 @@ async fn save_submission_reuploads_kept_files() {
         .and(query_param("wsfunction", "mod_assign_save_submission"))
         .and(body_string_contains("files_filemanager%5D=77"))
         .and(body_string_contains("%3Cp%3EHallo%3C%2Fp%3E"))
+        .and(body_string_contains("onlinetext_editor%5D%5Bitemid%5D=88"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([])))
         .expect(1)
         .mount(&server)

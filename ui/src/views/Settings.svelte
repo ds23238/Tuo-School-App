@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getVersion } from "@tauri-apps/api/app";
   import { ask, open } from "@tauri-apps/plugin-dialog";
+  import Icon from "../components/Icon.svelte";
   import { api, type Account, type Settings } from "../lib/api";
   import { errorText } from "../lib/errors";
   import { i18n, locales } from "../lib/i18n/index.svelte";
@@ -53,75 +54,116 @@
   }
 </script>
 
-{#if error}
-  <p class="notice error">{error}</p>
-{/if}
-{#if !keyringOk}
-  <p class="notice warning">{i18n.t.settings.keyringMissing}</p>
-{/if}
+<div class="page">
+  <h1>{i18n.t.nav.settings}</h1>
+  {#if error}<p class="notice error">{error}</p>{/if}
+  {#if !keyringOk}<p class="notice warning">{i18n.t.settings.keyringMissing}</p>{/if}
 
-{#if settings}
-  <dl>
-    <dt><label for="locale">{i18n.t.settings.language}</label></dt>
-    <dd>
-      <select
-        id="locale"
-        value={settings.locale ?? ""}
-        onchange={(e) => update({ locale: e.currentTarget.value || null })}
-      >
-        <option value="">{i18n.t.settings.systemLanguage}</option>
-        {#each locales as l (l)}
-          <option value={l}>{i18n.t.locale[l]}</option>
-        {/each}
-      </select>
-    </dd>
+  {#if settings}
+    <section class="card">
+      <h2>{i18n.t.settings.general}</h2>
+      <div class="row">
+        <label for="locale">{i18n.t.settings.language}</label>
+        <select
+          id="locale"
+          value={settings.locale ?? ""}
+          onchange={(e) => update({ locale: e.currentTarget.value || null })}
+        >
+          <option value="">{i18n.t.settings.systemLanguage}</option>
+          {#each locales as l (l)}
+            <option value={l}>{i18n.t.locale[l]}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="row">
+        <span>{i18n.t.settings.syncDir}</span>
+        <div class="value">
+          <code>{settings.syncDir}</code>
+          <button class="btn small" onclick={chooseSyncDir}><Icon name="folder" size={14} />{i18n.t.settings.change}</button>
+        </div>
+      </div>
+    </section>
 
-    <dt>{i18n.t.settings.syncDir}</dt>
-    <dd class="row">
-      <code>{settings.syncDir}</code>
-      <button onclick={chooseSyncDir}>{i18n.t.settings.change}</button>
-    </dd>
-
-    <dt>{i18n.t.settings.accounts}</dt>
-    <dd>
+    <section class="card">
+      <h2>{i18n.t.settings.accounts}</h2>
       {#each accounts as account (account.service)}
         <div class="row">
-          <span>
-            <strong>{i18n.t.service[account.service]}</strong>
-            {account.displayName ?? account.username} · {account.baseUrl}
-          </span>
-          <button onclick={() => signOut(account)}>{i18n.t.settings.signOut}</button>
+          <div>
+            <div class="strong">{i18n.t.service[account.service]}</div>
+            <div class="muted small">{account.displayName ?? account.username} · {new URL(account.baseUrl).host}</div>
+          </div>
+          <button class="btn small" onclick={() => signOut(account)}>
+            <Icon name="logout" size={14} />{i18n.t.settings.signOut}
+          </button>
         </div>
       {:else}
-        <span class="muted">{i18n.t.settings.noAccounts}</span>
+        <p class="muted">{i18n.t.settings.noAccounts}</p>
       {/each}
-    </dd>
+    </section>
 
-    <dt>{i18n.t.settings.version}</dt>
-    <dd>{#await version then v}{v}{/await}</dd>
-  </dl>
-{/if}
+    <section class="card">
+      <h2>{i18n.t.settings.about}</h2>
+      <div class="row">
+        <span>{i18n.t.settings.version}</span>
+        <span class="muted">TSA-Sync {#await version then v}{v}{/await}</span>
+      </div>
+    </section>
+  {/if}
+</div>
 
 <style>
-  dl {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 16px 24px;
-    align-items: baseline;
-    margin: 0;
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 32px 40px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
   }
-  dd {
-    margin: 0;
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  section {
+    padding: 8px 22px;
+  }
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 0 4px;
   }
   .row {
     display: flex;
-    gap: 12px;
-    align-items: baseline;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
   }
-  .muted {
-    color: var(--text-muted);
+  h2 + .row {
+    border-top: 0;
+  }
+  .value {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
   }
   code {
-    word-break: break-all;
+    font-size: 13px;
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+  .strong {
+    font-weight: 600;
+  }
+  p {
+    margin: 0;
+  }
+  section > p {
+    padding: 12px 0;
   }
 </style>

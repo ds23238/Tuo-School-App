@@ -352,9 +352,22 @@ impl Session<'_> {
             params.push(("plugindata[files_filemanager]", item_id.to_string()));
         }
         if let (true, Some(text)) = (current.text_submission, &draft.text) {
+            // Der Text braucht einen eigenen Entwurfsbereich: Teilt er sich
+            // den der Dateien, verwirft Moodle die Dateien.
+            #[derive(Deserialize)]
+            struct Unused {
+                itemid: i64,
+            }
+            let text_item = self
+                .call::<Unused>("core_files_get_unused_draft_itemid", &[])
+                .await
+                .map_or(0, |u| u.itemid);
             params.push(("plugindata[onlinetext_editor][text]", text_to_html(text)));
             params.push(("plugindata[onlinetext_editor][format]", "1".into()));
-            params.push(("plugindata[onlinetext_editor][itemid]", item_id.to_string()));
+            params.push((
+                "plugindata[onlinetext_editor][itemid]",
+                text_item.to_string(),
+            ));
         }
         let warnings: Vec<Warning> = self.call("mod_assign_save_submission", &params).await?;
         warnings_to_result(warnings)
