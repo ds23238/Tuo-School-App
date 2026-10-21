@@ -6,6 +6,8 @@ pub mod contents;
 pub mod courses;
 pub mod error;
 pub mod html;
+pub mod mail;
+pub mod messages;
 pub mod pages;
 pub mod paths;
 pub mod session;

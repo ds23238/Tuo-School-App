@@ -37,3 +37,20 @@ export function formatDeadline(unixSeconds: number): string {
     minute: "2-digit",
   }).format(unixSeconds * 1000);
 }
+
+/** Heute nur die Uhrzeit, sonst das Datum – für Listen von Nachrichten. */
+export function formatShort(unixSeconds: number): string {
+  const date = new Date(unixSeconds * 1000);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return formatTime(date);
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return new Intl.DateTimeFormat(i18n.locale, {
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+  }).format(date);
+}
+
+export function formatDay(unixSeconds: number): string {
+  return new Intl.DateTimeFormat(i18n.locale, { dateStyle: "full" }).format(unixSeconds * 1000);
+}

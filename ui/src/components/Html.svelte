@@ -59,6 +59,25 @@
   .html :global(a) {
     color: var(--accent-strong);
   }
+  /* Eingebettete Seiten (iframes) erscheinen als Link, siehe html.rs. */
+  .html :global(a.embed) {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .html :global(a.embed)::before {
+    content: "▶";
+    font-size: 0.8em;
+  }
+  .html :global(a.embed:hover) {
+    border-color: var(--accent);
+  }
   .html :global(table) {
     border-collapse: collapse;
     max-width: 100%;

@@ -11,6 +11,11 @@ pub struct Texts {
     pub new_files_body: fn(usize, &str) -> String,
     pub updates_title: &'static str,
     pub updates_body: fn(i64) -> String,
+    pub chat_title: fn(&str) -> String,
+    pub mail_title: fn(&str) -> String,
+    pub notification_title: &'static str,
+    pub messages_title: &'static str,
+    pub messages_body: fn(usize) -> String,
 }
 
 const DE: Texts = Texts {
@@ -34,6 +39,11 @@ const DE: Texts = Texts {
             format!("{n} Dateien wurden online geändert.")
         }
     },
+    chat_title: |name| format!("Nachricht von {name}"),
+    mail_title: |name| format!("Mail von {name}"),
+    notification_title: "Moodle-Benachrichtigung",
+    messages_title: "Neue Mitteilungen",
+    messages_body: |n| format!("{n} neue Nachrichten, Mails und Benachrichtigungen"),
 };
 
 const EN: Texts = Texts {
@@ -57,6 +67,11 @@ const EN: Texts = Texts {
             format!("{n} files were changed online.")
         }
     },
+    chat_title: |name| format!("Message from {name}"),
+    mail_title: |name| format!("Mail from {name}"),
+    notification_title: "Moodle notification",
+    messages_title: "New messages",
+    messages_body: |n| format!("{n} new messages, mails and notifications"),
 };
 
 /// Sprache aus den Einstellungen, sonst die des Systems.

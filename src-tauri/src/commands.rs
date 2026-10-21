@@ -5,13 +5,15 @@ use tauri::{AppHandle, Manager, State};
 use tsa_core::{Account, SecretKind, Service, Settings};
 use tsa_moodle::assign::{Assignment, Draft};
 use tsa_moodle::contents::CourseView;
+use tsa_moodle::mail::{DraftInput, Folder, MailDraft, MailMessage, MailPage, MailStatus, Person};
+use tsa_moodle::messages::{Chat, ChatMessage, Conversation, Counts, Member, Notification};
 use tsa_moodle::pages::PageContent;
 use tsa_moodle::session::{CourseSync, SiteCheck};
 use tsa_moodle::sync::{CourseFiles, course_dir};
 use tsa_moodle::{Course, Session};
 
 use crate::error::Result;
-use crate::{AppState, background, launch, media, tray};
+use crate::{AppState, autostart, background, inbox, launch, media, tray};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings> {
@@ -32,9 +34,12 @@ pub fn list_accounts(state: State<AppState>) -> Result<Vec<Account>> {
 }
 
 #[tauri::command]
-pub fn remove_account(state: State<AppState>, service: Service) -> Result<()> {
+pub async fn remove_account(state: State<'_, AppState>, service: Service) -> Result<()> {
     match service {
-        Service::Moodle => Ok(moodle(&state).sign_out()?),
+        Service::Moodle => {
+            state.mail.reset().await;
+            Ok(moodle(&state).sign_out()?)
+        }
         Service::Untis => Ok(Account::remove(&state.db, state.secrets.as_ref(), service)?),
     }
 }
@@ -65,6 +70,7 @@ pub async fn moodle_login(
     password: String,
     remember: bool,
 ) -> Result<Account> {
+    state.mail.reset().await;
     Ok(moodle(&state)
         .login(&url, &username, &password, remember)
         .await?)
@@ -261,14 +267,221 @@ pub async fn open_url(app: AppHandle, url: String) -> Result<()> {
     launch::url(&app, &url).await
 }
 
-/// Im Flatpak gibt es keinen Autostart-Eintrag, der von außen startbar wäre.
 #[tauri::command]
-pub fn autostart_supported() -> bool {
-    std::env::var_os("FLATPAK_ID").is_none()
+pub fn autostart_enabled(app: AppHandle, state: State<'_, AppState>) -> Result<bool> {
+    autostart::enabled(&app, &state)
+}
+
+#[tauri::command]
+pub async fn set_autostart(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<()> {
+    autostart::set(&app, &state, enabled).await
 }
 
 /// Die Grafik-Einstellung gibt es nur unter Linux (WebKitGTK).
 #[tauri::command]
 pub fn graphics_configurable() -> bool {
     cfg!(target_os = "linux")
+}
+
+#[tauri::command]
+pub fn message_counts(state: State<'_, AppState>) -> Counts {
+    state.inbox.counts()
+}
+
+#[tauri::command]
+pub async fn refresh_message_counts(app: AppHandle) -> Counts {
+    inbox::check(&app).await
+}
+
+#[tauri::command]
+pub async fn moodle_conversations(state: State<'_, AppState>) -> Result<Vec<Conversation>> {
+    Ok(moodle(&state).conversations(&media::urls()).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_chat(
+    state: State<'_, AppState>,
+    conversation_id: i64,
+    before: usize,
+) -> Result<Chat> {
+    Ok(moodle(&state)
+        .chat(conversation_id, before, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_mark_chat_read(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    conversation_id: i64,
+) -> Result<()> {
+    moodle(&state).mark_chat_read(conversation_id).await?;
+    inbox::check(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn moodle_send_chat(
+    state: State<'_, AppState>,
+    conversation_id: i64,
+    text: String,
+) -> Result<ChatMessage> {
+    Ok(moodle(&state)
+        .send_chat(conversation_id, &text, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_send_to_user(
+    state: State<'_, AppState>,
+    user_id: i64,
+    text: String,
+) -> Result<i64> {
+    Ok(moodle(&state).send_to_user(user_id, &text).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_search_people(state: State<'_, AppState>, text: String) -> Result<Vec<Member>> {
+    Ok(moodle(&state).search_people(&text, &media::urls()).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_notifications(state: State<'_, AppState>) -> Result<Vec<Notification>> {
+    Ok(moodle(&state).notifications(&media::urls()).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_mark_notification_read(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<()> {
+    moodle(&state).mark_notification_read(id).await?;
+    inbox::check(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn moodle_mark_all_notifications_read(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<()> {
+    moodle(&state).mark_all_notifications_read().await?;
+    inbox::check(&app).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn mail_status(state: State<'_, AppState>) -> Result<Option<MailStatus>> {
+    Ok(moodle(&state).mail_status(&state.mail).await?)
+}
+
+#[tauri::command]
+pub async fn mail_list(
+    state: State<'_, AppState>,
+    folder: Folder,
+    course_id: Option<i64>,
+    search: String,
+    offset: usize,
+) -> Result<MailPage> {
+    Ok(moodle(&state)
+        .mail_list(
+            &state.mail,
+            folder,
+            course_id,
+            &search,
+            offset,
+            &media::urls(),
+        )
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_message(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<MailMessage> {
+    let message = moodle(&state)
+        .mail_message(&state.mail, id, &media::urls())
+        .await?;
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move { inbox::check(&app).await });
+    Ok(message)
+}
+
+#[tauri::command]
+pub async fn mail_set_flag(
+    state: State<'_, AppState>,
+    id: i64,
+    flag: String,
+    value: bool,
+) -> Result<()> {
+    Ok(moodle(&state)
+        .mail_set_flag(&state.mail, id, &flag, value)
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_set_deleted(state: State<'_, AppState>, id: i64, deleted: u8) -> Result<()> {
+    Ok(moodle(&state)
+        .mail_set_deleted(&state.mail, id, deleted)
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_search_users(
+    state: State<'_, AppState>,
+    course_id: i64,
+    text: String,
+) -> Result<Vec<Person>> {
+    Ok(moodle(&state)
+        .mail_search_users(&state.mail, course_id, &text, &media::urls())
+        .await?)
+}
+
+/// `kind`: `new` (mit Kurs-ID), `reply`, `replyAll` oder `forward` (mit
+/// Nachrichten-ID).
+#[tauri::command]
+pub async fn mail_create(state: State<'_, AppState>, kind: String, id: i64) -> Result<MailDraft> {
+    Ok(moodle(&state)
+        .mail_create(&state.mail, &kind, id, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_draft(state: State<'_, AppState>, id: i64) -> Result<MailDraft> {
+    Ok(moodle(&state)
+        .mail_draft(&state.mail, id, false, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_save(
+    state: State<'_, AppState>,
+    id: i64,
+    input: DraftInput,
+    send: bool,
+) -> Result<()> {
+    Ok(moodle(&state)
+        .mail_save(&state.mail, id, input, send)
+        .await?)
+}
+
+#[tauri::command]
+pub async fn mail_open_attachment(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    message_id: i64,
+    name: String,
+) -> Result<()> {
+    let dir = app.path().app_cache_dir()?.join("mail");
+    let path = moodle(&state)
+        .mail_attachment(&state.mail, message_id, &name, &dir)
+        .await?;
+    launch::path(&app, &path).await
 }

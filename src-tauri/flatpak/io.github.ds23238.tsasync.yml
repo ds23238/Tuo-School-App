@@ -14,6 +14,8 @@ finish-args:
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.kde.StatusNotifierWatcher
 modules:
+  # Für das Symbol im Infobereich; aus github.com/flathub/shared-modules.
+  - libayatana-appindicator/libayatana-appindicator-gtk3.json
   - name: tsa-sync
     buildsystem: simple
     sources:

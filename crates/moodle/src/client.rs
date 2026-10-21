@@ -53,10 +53,35 @@ pub struct SiteInfo {
     pub userid: i64,
     pub fullname: String,
     pub sitename: String,
+    /// Funktionen, die das Token aufrufen darf.
+    #[serde(default)]
+    pub functions: Vec<SiteFunction>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SiteFunction {
+    pub name: String,
+}
+
+const USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"));
+
+/// Auto-Login-Schlüssel gibt Moodle nur an Apps, die sich als Moodle-App
+/// ausweisen. Nur dafür: Moodle Workplace lehnt diese Kennung sonst ab
+/// („Bitte laden Sie die Moodle Workplace App herunter“).
+const APP_USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"), " MoodleMobile");
+const APP_ONLY: &[&str] = &["tool_mobile_get_autologin_key"];
+
+/// HTTP-Client wie ein Browser, mit Cookies für eine Moodle-Sitzung.
+pub(crate) fn browser() -> reqwest::Client {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .cookie_store(true)
+        .build()
+        .expect("HTTP-Client mit Standardeinstellungen")
 }
 
 /// Moodle-Meldungen enthalten manchmal HTML (`<p>…</p>`).
-fn text_only(message: &str) -> String {
+pub(crate) fn text_only(message: &str) -> String {
     let spaced = message.replace("</p>", "</p> ");
     crate::plain(&ammonia::Builder::empty().clean(&spaced).to_string())
 }
@@ -100,7 +125,7 @@ pub struct Client {
 impl Client {
     pub fn new(base: Url) -> Self {
         let http = reqwest::Client::builder()
-            .user_agent(concat!("TSA-Sync/", env!("CARGO_PKG_VERSION")))
+            .user_agent(USER_AGENT)
             .build()
             .expect("HTTP-Client mit Standardeinstellungen");
         Self { http, base }
@@ -194,15 +219,11 @@ impl Client {
             .append_pair("wsfunction", function);
         let mut form: Vec<(&str, &str)> = vec![("wstoken", token)];
         form.extend(params.iter().map(|(k, v)| (*k, v.as_str())));
-        let value: Value = self
-            .http
-            .post(url)
-            .form(&form)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
+        let mut request = self.http.post(url).form(&form);
+        if APP_ONLY.contains(&function) {
+            request = request.header(reqwest::header::USER_AGENT, APP_USER_AGENT);
+        }
+        let value: Value = request.send().await?.error_for_status()?.json().await?;
         if let Some(code) = value.get("exception").and(value.get("errorcode")) {
             let code = code.as_str().unwrap_or_default();
             return Err(match code {
