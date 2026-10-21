@@ -3,7 +3,7 @@
   import Chats from "../components/messages/Chats.svelte";
   import Mail from "../components/messages/Mail.svelte";
   import Notifications from "../components/messages/Notifications.svelte";
-  import { api, type Account, type MailStatus } from "../lib/api";
+  import { api, isCommandError, type Account, type MailStatus } from "../lib/api";
   import { errorText } from "../lib/errors";
   import { i18n } from "../lib/i18n/index.svelte";
   import { inbox } from "../lib/inbox.svelte";
@@ -42,7 +42,8 @@
     try {
       mail = await api.mail.status();
     } catch (e) {
-      mailError = errorText(e);
+      // Nur wenn es Mail gibt, die Anmeldung dafür aber gerade scheitert.
+      if (isCommandError(e) && e.code === "mailLogin") mailError = errorText(e);
     }
   });
 
