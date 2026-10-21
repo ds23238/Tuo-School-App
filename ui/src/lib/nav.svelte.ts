@@ -1,6 +1,6 @@
 import type { Course, Module } from "./api";
 
-export type View = "today" | "courses" | "timetable" | "settings";
+export type View = "today" | "courses" | "messages" | "timetable" | "settings";
 
 /** Aktuelle Ansicht; Kurs und Aktivität nur innerhalb von „Kurse“. */
 class Nav {

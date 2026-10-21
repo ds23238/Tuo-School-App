@@ -18,6 +18,14 @@ pub struct MediaUrls {
 }
 
 impl MediaUrls {
+    /// Für Texte, deren Bilder nicht angezeigt werden.
+    pub fn none() -> Self {
+        Self {
+            prefix: String::new(),
+            scheme: "media",
+        }
+    }
+
     pub fn url(&self, original: &Url) -> String {
         format!(
             "{}{}",

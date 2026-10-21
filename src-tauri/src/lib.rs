@@ -3,6 +3,7 @@ mod background;
 mod commands;
 mod error;
 mod graphics;
+mod inbox;
 mod launch;
 mod media;
 mod texts;
@@ -19,6 +20,8 @@ pub struct AppState {
     pub secrets: Box<dyn SecretStore>,
     pub default_sync_dir: PathBuf,
     pub background: background::Background,
+    pub inbox: inbox::Inbox,
+    pub mail: tsa_moodle::mail::MailState,
     /// Ohne Tray-Symbol beendet Schließen die App, statt sie zu verstecken.
     pub has_tray: AtomicBool,
 }
@@ -55,6 +58,8 @@ pub fn run() {
                 secrets: Box::new(KeyringStore),
                 default_sync_dir: app.path().home_dir()?.join("TSA-Sync"),
                 background: background::Background::default(),
+                inbox: inbox::Inbox::default(),
+                mail: tsa_moodle::mail::MailState::default(),
                 has_tray: AtomicBool::new(false),
             });
             app.manage(tray::Tray::default());
@@ -83,6 +88,7 @@ pub fn run() {
                 }
             }
             background::init(handle);
+            inbox::init(handle);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -126,6 +132,27 @@ pub fn run() {
             commands::moodle_save_submission,
             commands::moodle_submit,
             commands::moodle_open_assignment_file,
+            commands::message_counts,
+            commands::refresh_message_counts,
+            commands::moodle_conversations,
+            commands::moodle_chat,
+            commands::moodle_mark_chat_read,
+            commands::moodle_send_chat,
+            commands::moodle_send_to_user,
+            commands::moodle_search_people,
+            commands::moodle_notifications,
+            commands::moodle_mark_notification_read,
+            commands::moodle_mark_all_notifications_read,
+            commands::mail_status,
+            commands::mail_list,
+            commands::mail_message,
+            commands::mail_set_flag,
+            commands::mail_set_deleted,
+            commands::mail_search_users,
+            commands::mail_create,
+            commands::mail_draft,
+            commands::mail_save,
+            commands::mail_open_attachment,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri-Anwendung konnte nicht gestartet werden");

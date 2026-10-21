@@ -84,6 +84,12 @@ pub fn set_value(db: &Database, key: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn delete_value(db: &Database, key: &str) -> Result<()> {
+    db.conn()
+        .execute("DELETE FROM settings WHERE key = ?1", [key])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

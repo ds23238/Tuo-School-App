@@ -22,6 +22,10 @@ pub enum Error {
     FileNotFound,
     #[error("Dateifehler: {0}")]
     Io(std::io::Error),
+    #[error("Diese Moodle-Seite hat kein Moodle-Mail")]
+    MailUnavailable,
+    #[error("Anmeldung für Moodle-Mail gerade nicht möglich")]
+    MailLogin,
     #[error(transparent)]
     Core(#[from] tsa_core::Error),
 }
@@ -41,6 +45,8 @@ impl Error {
             Self::Response(_) => "response",
             Self::FileNotFound => "fileNotFound",
             Self::Io(_) => "io",
+            Self::MailUnavailable => "mailUnavailable",
+            Self::MailLogin => "mailLogin",
             Self::Core(_) => "internal",
         }
     }

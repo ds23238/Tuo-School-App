@@ -13,6 +13,9 @@ use crate::html::MediaUrls;
 use crate::sync::{self, Files};
 use crate::{Client, Course, Error, Result};
 
+/// Moodle-Kennung des angemeldeten Kontos.
+const USER_ID: &str = "moodle.userid";
+
 type Download = std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 /// Ergebnis der Prüfung einer Adresse vor dem Login.
@@ -73,6 +76,7 @@ impl<'a> Session<'a> {
         } else {
             self.secrets.delete(Service::Moodle, SecretKind::Password)?;
         }
+        tsa_core::settings::set_value(self.db, USER_ID, &info.userid.to_string())?;
         let mut account = Account::new(Service::Moodle, site.url, username.to_owned());
         account.display_name = Some(crate::plain(&info.fullname));
         account.save(self.db)?;
@@ -95,6 +99,8 @@ impl<'a> Session<'a> {
 
     /// Entfernt Kurse, Inhalte und Dateiliste; Dateien im Sync-Ordner bleiben.
     fn forget_data(&self) -> Result<()> {
+        tsa_core::settings::delete_value(self.db, USER_ID)?;
+        tsa_core::settings::delete_value(self.db, crate::messages::SEEN)?;
         Course::clear(self.db)?;
         contents::clear(self.db)?;
         sync::clear(self.db)
@@ -253,18 +259,27 @@ impl<'a> Session<'a> {
     /// das nicht (Moodle erlaubt nur alle paar Minuten einen Schlüssel),
     /// kommt `target` unverändert zurück.
     pub async fn autologin_url(&self, target: &str) -> Result<String> {
+        Ok(self
+            .autologin_link(target)
+            .await?
+            .map_or_else(|| target.to_owned(), |u| u.to_string()))
+    }
+
+    /// Einmal gültige Adresse, die eine Browser-Sitzung anmeldet und dann zu
+    /// `target` weiterleitet; `None`, wenn Moodle gerade keinen Schlüssel gibt.
+    pub(crate) async fn autologin_link(&self, target: &str) -> Result<Option<Url>> {
         let (client, _) = self.client()?;
         let Ok(target_url) = Url::parse(target) else {
-            return Ok(target.to_owned());
+            return Ok(None);
         };
         if target_url.origin() != client.base().origin() {
-            return Ok(target.to_owned());
+            return Ok(None);
         }
         let Some(private) = self
             .secrets
             .get(Service::Moodle, SecretKind::PrivateToken)?
         else {
-            return Ok(target.to_owned());
+            return Ok(None);
         };
         #[derive(serde::Deserialize)]
         struct Key {
@@ -277,19 +292,16 @@ impl<'a> Session<'a> {
                 &[("privatetoken", private)],
             )
             .await;
-        let info: Result<crate::SiteInfo> = self.call("core_webservice_get_site_info", &[]).await;
-        match (key, info) {
-            (Ok(key), Ok(info)) => {
-                let mut url = Url::parse(&key.autologinurl)
-                    .map_err(|_| Error::InvalidUrl(key.autologinurl.clone()))?;
-                url.query_pairs_mut()
-                    .append_pair("userid", &info.userid.to_string())
-                    .append_pair("key", &key.key)
-                    .append_pair("urltogo", target);
-                Ok(url.to_string())
-            }
-            _ => Ok(target.to_owned()),
-        }
+        let (Ok(key), Ok(user_id)) = (key, self.user_id().await) else {
+            return Ok(None);
+        };
+        let mut url = Url::parse(&key.autologinurl)
+            .map_err(|_| Error::InvalidUrl(key.autologinurl.clone()))?;
+        url.query_pairs_mut()
+            .append_pair("userid", &user_id.to_string())
+            .append_pair("key", &key.key)
+            .append_pair("urltogo", target);
+        Ok(Some(url))
     }
 
     /// Meldet Moodle den Besuch eines Kurses, wie es Browser und Moodle-App
@@ -354,6 +366,20 @@ impl<'a> Session<'a> {
         }
         let token = self.relogin(&client, &account).await?;
         client.call(&token, function, params).await
+    }
+
+    pub(crate) async fn user_id(&self) -> Result<i64> {
+        let stored = tsa_core::settings::get_value(self.db, USER_ID)?;
+        if let Some(id) = stored.and_then(|v| v.parse().ok()) {
+            return Ok(id);
+        }
+        let info: crate::SiteInfo = self.call("core_webservice_get_site_info", &[]).await?;
+        tsa_core::settings::set_value(self.db, USER_ID, &info.userid.to_string())?;
+        Ok(info.userid)
+    }
+
+    pub(crate) fn secrets(&self) -> &dyn SecretStore {
+        self.secrets
     }
 
     pub(crate) fn db(&self) -> &Database {

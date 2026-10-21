@@ -53,10 +53,31 @@ pub struct SiteInfo {
     pub userid: i64,
     pub fullname: String,
     pub sitename: String,
+    /// Funktionen, die das Token aufrufen darf.
+    #[serde(default)]
+    pub functions: Vec<SiteFunction>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SiteFunction {
+    pub name: String,
+}
+
+/// Kennung, mit der Moodle Auto-Login-Schlüssel herausgibt (nur an Apps,
+/// die sich als Moodle-App ausweisen).
+const USER_AGENT: &str = concat!("TSA-Sync/", env!("CARGO_PKG_VERSION"), " MoodleMobile");
+
+/// HTTP-Client wie ein Browser, mit Cookies für eine Moodle-Sitzung.
+pub(crate) fn browser() -> reqwest::Client {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .cookie_store(true)
+        .build()
+        .expect("HTTP-Client mit Standardeinstellungen")
 }
 
 /// Moodle-Meldungen enthalten manchmal HTML (`<p>…</p>`).
-fn text_only(message: &str) -> String {
+pub(crate) fn text_only(message: &str) -> String {
     let spaced = message.replace("</p>", "</p> ");
     crate::plain(&ammonia::Builder::empty().clean(&spaced).to_string())
 }

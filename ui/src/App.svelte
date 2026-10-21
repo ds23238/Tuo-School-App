@@ -4,13 +4,16 @@
   import { i18n } from "./lib/i18n/index.svelte";
   import { nav, type View } from "./lib/nav.svelte";
   import { sync } from "./lib/sync.svelte";
+  import { inbox } from "./lib/inbox.svelte";
   import Courses from "./views/Courses.svelte";
+  import Messages from "./views/Messages.svelte";
   import Placeholder from "./views/Placeholder.svelte";
   import Settings from "./views/Settings.svelte";
 
   const items: { view: View; icon: string }[] = [
     { view: "today", icon: "today" },
     { view: "courses", icon: "courses" },
+    { view: "messages", icon: "message" },
     { view: "timetable", icon: "timetable" },
     { view: "settings", icon: "settings" },
   ];
@@ -76,8 +79,13 @@
         aria-current={nav.view === item.view ? "page" : undefined}
         onclick={() => nav.go(item.view)}
       >
-        <Icon name={item.icon} />
-        <span>{i18n.t.nav[item.view]}</span>
+        <span class="icon">
+          <Icon name={item.icon} />
+          {#if item.view === "messages" && inbox.total > 0}
+            <span class="badge" aria-label={String(inbox.total)}>{inbox.total > 99 ? "99+" : inbox.total}</span>
+          {/if}
+        </span>
+        <span class="label">{i18n.t.nav[item.view]}</span>
       </button>
     {/each}
     <div class="spacer"></div>
@@ -96,10 +104,12 @@
   <main>
     {#if nav.view === "courses"}
       <Courses />
+    {:else if nav.view === "messages"}
+      <Messages />
     {:else if nav.view === "settings"}
       <Settings />
     {:else}
-      <Placeholder icon={nav.view} title={i18n.t.nav[nav.view]} text={i18n.t.placeholder[nav.view]} />
+      <Placeholder icon={nav.view} title={i18n.t.nav[nav.view]} text={i18n.t.placeholder[nav.view as "today" | "timetable"]} />
     {/if}
   </main>
 </div>
@@ -150,7 +160,7 @@
     flex-direction: column;
     padding: 2px 0 18px;
   }
-  nav.collapsed .nav-item span,
+  nav.collapsed .nav-item .label,
   nav.collapsed .sync span:not(.dot) {
     display: none;
   }
@@ -181,6 +191,27 @@
   .nav-item.active {
     background: var(--accent-soft);
     color: var(--accent-ink);
+  }
+  .icon {
+    position: relative;
+    display: flex;
+  }
+  .badge {
+    position: absolute;
+    top: -6px;
+    right: -9px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 10.5px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+    border: 2px solid var(--surface);
   }
   .spacer {
     flex: 1;
@@ -223,7 +254,7 @@
       width: 68px;
       padding: 18px 8px;
     }
-    .nav-item span,
+    .nav-item .label,
     .sync span:not(.dot) {
       display: none;
     }

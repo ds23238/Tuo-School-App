@@ -176,6 +176,159 @@ export interface Assignment {
   feedbackFiles: AssignFile[];
 }
 
+export interface Counts {
+  chats: number;
+  notifications: number;
+  /** `null` ohne Moodle-Mail. */
+  mail: number | null;
+}
+
+export interface Member {
+  id: number;
+  name: string;
+  image: string | null;
+  canMessage: boolean;
+}
+
+export interface Conversation {
+  id: number;
+  name: string;
+  subtitle: string | null;
+  image: string | null;
+  kind: "individual" | "group" | "self";
+  unread: number;
+  memberCount: number;
+  favourite: boolean;
+  muted: boolean;
+  members: Member[];
+  last: { preview: string; time: number; mine: boolean } | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  from: number;
+  fromName: string | null;
+  /** Bereinigtes HTML. */
+  html: string;
+  time: number;
+  mine: boolean;
+}
+
+export interface Chat {
+  id: number;
+  /** Älteste zuerst. */
+  messages: ChatMessage[];
+  hasMore: boolean;
+}
+
+export interface MoodleNotification {
+  id: number;
+  subject: string;
+  html: string;
+  time: number;
+  read: boolean;
+  url: string | null;
+  urlName: string | null;
+  component: string | null;
+}
+
+export type Folder = "inbox" | "starred" | "sent" | "drafts" | "trash";
+
+export interface MailCourse {
+  id: number;
+  shortName: string;
+  fullName: string;
+  unread: number;
+  drafts: number;
+}
+
+export interface MailStatus {
+  courses: MailCourse[];
+  unread: number;
+  drafts: number;
+}
+
+export interface Person {
+  id: number;
+  name: string;
+  image: string | null;
+}
+
+export interface Recipient extends Person {
+  kind: "to" | "cc" | "bcc";
+}
+
+export interface MailSummary {
+  id: number;
+  subject: string;
+  time: number;
+  unread: boolean;
+  starred: boolean;
+  draft: boolean;
+  attachments: number;
+  course: string;
+  sender: Person;
+  recipients: Recipient[];
+}
+
+export interface MailAttachment {
+  name: string;
+  size: number;
+  mime: string;
+  url: string;
+}
+
+export interface MailReference {
+  id: number;
+  subject: string;
+  html: string;
+  time: number;
+  sender: Person;
+  attachments: MailAttachment[];
+}
+
+export interface MailMessage {
+  id: number;
+  subject: string;
+  html: string;
+  time: number;
+  unread: boolean;
+  starred: boolean;
+  deleted: boolean;
+  draft: boolean;
+  courseId: number;
+  course: string;
+  sender: Person;
+  recipients: Recipient[];
+  attachments: MailAttachment[];
+  references: MailReference[];
+}
+
+export interface MailDraft {
+  id: number;
+  courseId: number;
+  subject: string;
+  text: string;
+  quote: string | null;
+  quoteHtml: string | null;
+  to: Person[];
+  cc: Person[];
+  bcc: Person[];
+  attachments: MailAttachment[];
+  references: MailReference[];
+}
+
+export interface DraftInput {
+  courseId: number;
+  to: number[];
+  cc: number[];
+  bcc: number[];
+  subject: string;
+  text: string;
+  quote: string | null;
+  add: string[];
+}
+
 /** Fehler aus dem Backend, siehe src-tauri/src/error.rs. */
 export interface CommandError {
   code: string;
@@ -228,5 +381,48 @@ export const api = {
       invoke<void>("moodle_submit", { assignId, acceptStatement }),
     openAssignmentFile: (courseId: number, moduleId: number, feedback: boolean, name: string) =>
       invoke<void>("moodle_open_assignment_file", { courseId, moduleId, feedback, name }),
+  },
+
+  messages: {
+    counts: () => invoke<Counts>("message_counts"),
+    refreshCounts: () => invoke<Counts>("refresh_message_counts"),
+    conversations: () => invoke<Conversation[]>("moodle_conversations"),
+    chat: (conversationId: number, before = 0) =>
+      invoke<Chat>("moodle_chat", { conversationId, before }),
+    markChatRead: (conversationId: number) =>
+      invoke<void>("moodle_mark_chat_read", { conversationId }),
+    send: (conversationId: number, text: string) =>
+      invoke<ChatMessage>("moodle_send_chat", { conversationId, text }),
+    sendToUser: (userId: number, text: string) =>
+      invoke<number>("moodle_send_to_user", { userId, text }),
+    searchPeople: (text: string) => invoke<Member[]>("moodle_search_people", { text }),
+    notifications: () => invoke<MoodleNotification[]>("moodle_notifications"),
+    markNotificationRead: (id: number) => invoke<void>("moodle_mark_notification_read", { id }),
+    markAllNotificationsRead: () => invoke<void>("moodle_mark_all_notifications_read"),
+  },
+
+  mail: {
+    status: () => invoke<MailStatus | null>("mail_status"),
+    list: (folder: Folder, courseId: number | null, search: string, offset: number) =>
+      invoke<{ messages: MailSummary[]; total: number }>("mail_list", {
+        folder,
+        courseId,
+        search,
+        offset,
+      }),
+    message: (id: number) => invoke<MailMessage>("mail_message", { id }),
+    setFlag: (id: number, flag: "starred" | "unread", value: boolean) =>
+      invoke<void>("mail_set_flag", { id, flag, value }),
+    /** 0 = wiederherstellen, 1 = Papierkorb, 2 = endgültig. */
+    setDeleted: (id: number, deleted: 0 | 1 | 2) => invoke<void>("mail_set_deleted", { id, deleted }),
+    searchUsers: (courseId: number, text: string) =>
+      invoke<Person[]>("mail_search_users", { courseId, text }),
+    create: (kind: "new" | "reply" | "replyAll" | "forward", id: number) =>
+      invoke<MailDraft>("mail_create", { kind, id }),
+    draft: (id: number) => invoke<MailDraft>("mail_draft", { id }),
+    save: (id: number, input: DraftInput, send: boolean) =>
+      invoke<void>("mail_save", { id, input, send }),
+    openAttachment: (messageId: number, name: string) =>
+      invoke<void>("mail_open_attachment", { messageId, name }),
   },
 };
