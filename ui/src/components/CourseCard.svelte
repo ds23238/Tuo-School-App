@@ -78,6 +78,8 @@
 
 <style>
   article {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 260px;
     overflow: hidden;
     display: flex;
     flex-direction: column;

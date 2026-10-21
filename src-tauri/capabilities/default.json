@@ -9,6 +9,9 @@
     "core:default",
     "dialog:allow-open",
     "dialog:allow-ask",
-    "opener:default"
+    "opener:default",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

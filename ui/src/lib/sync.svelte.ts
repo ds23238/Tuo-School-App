@@ -1,7 +1,11 @@
-import { api, type CourseSync } from "./api";
+import { listen } from "@tauri-apps/api/event";
+import { api, type CourseSync, type SyncStatus } from "./api";
 import { errorText } from "./errors";
 
-/** Gemeinsamer Sync-Zustand für Seitenleiste, Kursliste und Kursseite. */
+/**
+ * Sync-Zustand aus dem Backend. Der Sync selbst läuft dort (auch im
+ * Hintergrund); hier kommt nur sein Stand per Event an.
+ */
 class SyncState {
   running = $state(false);
   lastAt = $state<Date | null>(null);
@@ -10,20 +14,25 @@ class SyncState {
   /** Erhöht sich nach jedem Lauf, damit Ansichten neu laden. */
   generation = $state(0);
 
+  constructor() {
+    api.syncStatus().then((s) => this.apply(s), () => {});
+    listen<SyncStatus>("sync-status", (e) => this.apply(e.payload));
+  }
+
+  private apply(s: SyncStatus) {
+    const finished = this.running && !s.running;
+    this.running = s.running;
+    this.lastAt = s.lastAt ? new Date(s.lastAt * 1000) : null;
+    this.error = s.error;
+    this.results = s.results;
+    if (finished) this.generation++;
+  }
+
   async run() {
-    if (this.running) return;
-    this.running = true;
-    this.error = null;
     try {
-      this.results = await api.moodle.sync();
-      const failed = this.results.find((r) => r.error);
-      if (failed) this.error = failed.error;
-      this.lastAt = new Date();
+      await api.syncNow();
     } catch (e) {
       this.error = errorText(e);
-    } finally {
-      this.running = false;
-      this.generation++;
     }
   }
 }

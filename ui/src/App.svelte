@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "./components/Icon.svelte";
-  import { fill, formatTime } from "./lib/format";
+  import { fill, formatDate, formatTime } from "./lib/format";
   import { i18n } from "./lib/i18n/index.svelte";
   import { nav, type View } from "./lib/nav.svelte";
   import { sync } from "./lib/sync.svelte";
@@ -15,16 +15,40 @@
     { view: "settings", icon: "settings" },
   ];
 
+  /** Eingeklappte Seitenleiste zeigt nur Symbole; Wahl bleibt erhalten. */
+  let collapsed = $state(readCollapsed());
+
+  function readCollapsed(): boolean {
+    try {
+      return localStorage.getItem("sidebar.collapsed") === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function toggleSidebar() {
+    collapsed = !collapsed;
+    try {
+      localStorage.setItem("sidebar.collapsed", collapsed ? "1" : "0");
+    } catch {
+      // Dann gilt es nur bis zum Neustart.
+    }
+  }
+
   const status = $derived.by(() => {
     if (sync.running) return i18n.t.sync.running;
     if (sync.error) return i18n.t.sync.failed;
-    if (sync.lastAt) return fill(i18n.t.sync.done, { time: formatTime(sync.lastAt) });
+    if (sync.lastAt) {
+      const today = sync.lastAt.toDateString() === new Date().toDateString();
+      const time = today ? formatTime(sync.lastAt) : formatDate(sync.lastAt.getTime() / 1000);
+      return fill(i18n.t.sync.done, { time });
+    }
     return i18n.t.sync.never;
   });
 </script>
 
 <div class="shell">
-  <nav aria-label="Navigation">
+  <nav aria-label="Navigation" class:collapsed>
     <div class="brand">
       <svg width="32" height="32" viewBox="0 0 512 512" aria-hidden="true">
         <rect x="16" y="16" width="480" height="480" rx="104" fill="#f07c1e" />
@@ -34,10 +58,20 @@
         <rect x="80" y="396" width="352" height="26" rx="6" fill="#fff" />
         <path d="M230 402v-60a26 26 0 0 1 52 0v60z" fill="#f07c1e" />
       </svg>
+      <button
+        class="collapse"
+        onclick={toggleSidebar}
+        aria-label={collapsed ? i18n.t.nav.expand : i18n.t.nav.collapse}
+        title={collapsed ? i18n.t.nav.expand : i18n.t.nav.collapse}
+        aria-expanded={!collapsed}
+      >
+        <Icon name={collapsed ? "chevronRight" : "chevronLeft"} size={18} />
+      </button>
     </div>
     {#each items as item (item.view)}
       <button
         class="nav-item"
+        title={collapsed ? i18n.t.nav[item.view] : undefined}
         class:active={nav.view === item.view}
         aria-current={nav.view === item.view ? "page" : undefined}
         onclick={() => nav.go(item.view)}
@@ -52,7 +86,7 @@
         <span class="dot" class:error={!!sync.error} class:running={sync.running}></span>
         <span>{status}</span>
       </div>
-      <button class="btn" onclick={() => sync.run()} disabled={sync.running}>
+      <button class="btn" onclick={() => sync.run()} disabled={sync.running} title={collapsed ? i18n.t.sync.now : undefined}>
         <Icon name="refresh" size={16} class={sync.running ? "spin" : ""} />
         <span>{i18n.t.sync.now}</span>
       </button>
@@ -86,7 +120,45 @@
     border-right: 1px solid var(--border);
   }
   .brand {
-    padding: 2px 8px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px 4px 18px 8px;
+  }
+  .collapse {
+    display: flex;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    padding: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .collapse:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+  nav {
+    transition: width 0.15s;
+  }
+  nav.collapsed {
+    width: 68px;
+    padding: 18px 8px 16px;
+  }
+  nav.collapsed .brand {
+    flex-direction: column;
+    padding: 2px 0 18px;
+  }
+  nav.collapsed .nav-item span,
+  nav.collapsed .sync span:not(.dot) {
+    display: none;
+  }
+  nav.collapsed .nav-item {
+    justify-content: center;
+  }
+  nav.collapsed .status {
+    justify-content: center;
   }
   .nav-item {
     display: flex;
@@ -152,7 +224,7 @@
       padding: 18px 8px;
     }
     .nav-item span,
-    .sync span {
+    .sync span:not(.dot) {
       display: none;
     }
     .nav-item {

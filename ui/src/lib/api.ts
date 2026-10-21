@@ -8,6 +8,19 @@ export interface Settings {
   /** `null` = Systemsprache. */
   locale: string | null;
   syncDir: string;
+  syncEnabled: boolean;
+  syncIntervalMinutes: number;
+  notifications: boolean;
+  /** Nur Linux: `auto`, `always`, `never`, `compat`. Wirkt nach Neustart. */
+  graphics: string;
+}
+
+export interface SyncStatus {
+  running: boolean;
+  /** Unix-Zeit des letzten abgeschlossenen Syncs. */
+  lastAt: number | null;
+  error: string | null;
+  results: CourseSync[];
 }
 
 export interface Account {
@@ -180,6 +193,8 @@ export const api = {
   removeAccount: (service: Service) => invoke<void>("remove_account", { service }),
   checkKeyring: () => invoke<void>("check_keyring"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  syncStatus: () => invoke<SyncStatus>("sync_status"),
+  syncNow: () => invoke<CourseSync[]>("sync_now"),
 
   moodle: {
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),
@@ -192,7 +207,7 @@ export const api = {
     fileStats: () => invoke<Record<string, CourseFiles>>("moodle_file_stats"),
     course: (id: number) => invoke<CourseView | null>("moodle_course", { id }),
     refreshCourse: (id: number) => invoke<CourseView>("moodle_refresh_course", { id }),
-    sync: () => invoke<CourseSync[]>("moodle_sync"),
+    courseViewed: (id: number) => invoke<void>("moodle_course_viewed", { id }),
     syncCourse: (id: number) => invoke<number>("moodle_sync_course", { id }),
     openFile: (id: number) => invoke<void>("moodle_open_file", { id }),
     updateFile: (id: number) => invoke<void>("moodle_update_file", { id }),

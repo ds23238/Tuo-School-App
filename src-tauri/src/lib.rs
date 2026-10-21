@@ -1,27 +1,50 @@
+mod background;
 mod commands;
 mod error;
+mod graphics;
 mod launch;
 mod media;
+mod texts;
+mod tray;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 use tsa_core::{Database, KeyringStore, SecretStore};
 
 pub struct AppState {
     pub db: Database,
     pub secrets: Box<dyn SecretStore>,
     pub default_sync_dir: PathBuf,
+    pub background: background::Background,
+    /// Ohne Tray-Symbol beendet Schließen die App, statt sie zu verstecken.
+    pub has_tray: AtomicBool,
 }
 
+/// Argument beim Autostart: im Tray starten, ohne Fenster.
+const MINIMIZED: &str = "--minimized";
+
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    let graphics_mode = graphics::prepare("io.github.ds23238.tsasync");
+
     tauri::Builder::default()
+        // Ein zweiter Start holt nur das vorhandene Fenster nach vorne.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            tray::show_window(app)
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![MINIMIZED]),
+        ))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .register_asynchronous_uri_scheme_protocol(media::SCHEME, |ctx, request, responder| {
             media::handle(ctx.app_handle(), request, responder)
         })
-        .setup(|app| {
+        .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Database::open(&data_dir.join("tsa-sync.db"))?;
@@ -30,8 +53,45 @@ pub fn run() {
                 db,
                 secrets: Box::new(KeyringStore),
                 default_sync_dir: app.path().home_dir()?.join("TSA-Sync"),
+                background: background::Background::default(),
+                has_tray: AtomicBool::new(false),
             });
+            app.manage(tray::Tray::default());
+
+            let handle = app.handle();
+            let has_tray = match tray::create(handle) {
+                Ok(()) => true,
+                Err(e) => {
+                    eprintln!("Kein Tray-Symbol verfügbar: {e}");
+                    false
+                }
+            };
+            app.state::<AppState>()
+                .has_tray
+                .store(has_tray, Ordering::Relaxed);
+            // Das Fenster startet sichtbar: unter Linux reagieren die Buttons der
+            // Titelleiste sonst teils nicht mehr, wenn es erst später erscheint.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                graphics::apply(&window, &graphics_mode);
+            }
+            let minimized = std::env::args().any(|a| a == MINIMIZED);
+            if minimized && has_tray {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+            background::init(handle);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let state = window.state::<AppState>();
+                if state.has_tray.load(Ordering::Relaxed) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
@@ -40,6 +100,8 @@ pub fn run() {
             commands::remove_account,
             commands::check_keyring,
             commands::open_url,
+            commands::autostart_supported,
+            commands::graphics_configurable,
             commands::moodle_check_site,
             commands::moodle_login,
             commands::moodle_courses,
@@ -48,7 +110,9 @@ pub fn run() {
             commands::moodle_course,
             commands::moodle_refresh_course,
             commands::moodle_file_stats,
-            commands::moodle_sync,
+            commands::sync_status,
+            commands::sync_now,
+            commands::moodle_course_viewed,
             commands::moodle_sync_course,
             commands::moodle_open_file,
             commands::moodle_update_file,
