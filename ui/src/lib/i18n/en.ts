@@ -6,6 +6,8 @@ export const en: Messages = {
     courses: "Courses",
     timetable: "Timetable",
     settings: "Settings",
+    collapse: "Collapse sidebar",
+    expand: "Expand sidebar",
   },
   placeholder: {
     today: "Your timetable, deadlines and new files will show up here soon.",

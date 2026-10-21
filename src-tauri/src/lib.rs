@@ -65,9 +65,13 @@ pub fn run() {
             app.state::<AppState>()
                 .has_tray
                 .store(has_tray, Ordering::Relaxed);
+            // Das Fenster startet sichtbar: unter Linux reagieren die Buttons der
+            // Titelleiste sonst teils nicht mehr, wenn es erst später erscheint.
             let minimized = std::env::args().any(|a| a == MINIMIZED);
-            if !(minimized && has_tray) {
-                tray::show_window(handle);
+            if minimized && has_tray {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
             }
             background::init(handle);
             Ok(())

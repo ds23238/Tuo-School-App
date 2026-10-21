@@ -16,7 +16,6 @@
         "height": 720,
         "minWidth": 720,
         "minHeight": 480,
-        "visible": false,
         "label": "main"
       }
     ],

@@ -4,6 +4,8 @@ export const de = {
     courses: "Kurse",
     timetable: "Stundenplan",
     settings: "Einstellungen",
+    collapse: "Seitenleiste einklappen",
+    expand: "Seitenleiste ausklappen",
   },
   placeholder: {
     today: "Hier erscheinen bald Stundenplan, Fristen und neue Dateien.",
