@@ -12,7 +12,22 @@ export const de = {
   },
   settings: {
     language: "Sprache",
+    systemLanguage: "Systemsprache",
+    syncDir: "Sync-Ordner",
+    change: "Ändern",
+    accounts: "Konten",
+    noAccounts: "Noch keine Konten verbunden.",
+    signOut: "Abmelden",
+    signOutConfirm: "Konto abmelden? Die Zugangsdaten werden aus dem Schlüsselbund entfernt; heruntergeladene Dateien bleiben erhalten.",
+    keyringMissing: "Der Schlüsselbund des Systems ist nicht erreichbar. Ohne ihn können keine Zugangsdaten gespeichert werden.",
     version: "Version",
+  },
+  service: {
+    moodle: "Moodle",
+    untis: "WebUntis",
+  },
+  error: {
+    generic: "Fehler",
   },
   locale: {
     de: "Deutsch",

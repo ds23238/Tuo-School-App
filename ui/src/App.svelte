@@ -7,10 +7,6 @@
   const views: View[] = ["today", "courses", "timetable", "settings"];
 
   let view = $state<View>("today");
-
-  $effect(() => {
-    document.documentElement.lang = i18n.locale;
-  });
 </script>
 
 <div class="layout">
