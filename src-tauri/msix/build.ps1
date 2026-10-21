@@ -12,9 +12,12 @@ $meta = cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo
 $version = ($meta.packages | Where-Object name -eq "tsa-sync").version
 $msixVersion = ($version -replace "[-+].*$", "") + ".0"
 
-$kits = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.*\x64" | Sort-Object Name -Descending | Select-Object -First 1
-$makeappx = Join-Path $kits.FullName "makeappx.exe"
-$signtool = Join-Path $kits.FullName "signtool.exe"
+# Neuestes SDK, das makeappx enthält; nicht jeder SDK-Ordner bringt es mit.
+$makeappx = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\makeappx.exe" |
+    Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+if (-not $makeappx) { throw "makeappx.exe nicht gefunden" }
+$signtool = Join-Path $makeappx.DirectoryName "signtool.exe"
+$makeappx = $makeappx.FullName
 
 Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory "$stage/Assets" | Out-Null
