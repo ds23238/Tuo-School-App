@@ -15,6 +15,7 @@ keyring = { version = "3.6", features = ["windows-native", "sync-secret-service"
 rusqlite = { version = "0.40", features = ["bundled"] }
 tempfile = "3"
 html-escape = "0.2"
+regex = "1"
 ammonia = "4"
 base64 = "0.22"
 sha2 = "0.10"

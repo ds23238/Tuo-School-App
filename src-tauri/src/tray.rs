@@ -58,6 +58,18 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
+    // Das Symbol geht als Datei an den Infobereich des Systems. Aus dem
+    // Flatpak ist dafür nur dieser Ordner auch außerhalb sichtbar.
+    if let (Some(id), Some(runtime)) = (
+        std::env::var_os("FLATPAK_ID"),
+        std::env::var_os("XDG_RUNTIME_DIR"),
+    ) {
+        let dir = std::path::Path::new(&runtime)
+            .join("app")
+            .join(id)
+            .join("tray-icon");
+        builder = builder.temp_dir_path(dir);
+    }
     builder.build(app)?;
 
     *app.state::<Tray>().0.lock().unwrap() = Some(Items {

@@ -73,6 +73,8 @@ export const en: Messages = {
     io: "The file could not be read or written",
     open: "Could not be opened",
     sync: "Sync failed",
+    autostart: "Could not change start at login",
+    autostartDenied: "The system did not allow running in the background.",
   },
   moodle: {
     signIn: "Sign in to Moodle",

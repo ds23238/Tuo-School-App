@@ -1,3 +1,4 @@
+mod autostart;
 mod background;
 mod commands;
 mod error;
@@ -100,7 +101,8 @@ pub fn run() {
             commands::remove_account,
             commands::check_keyring,
             commands::open_url,
-            commands::autostart_supported,
+            commands::autostart_enabled,
+            commands::set_autostart,
             commands::graphics_configurable,
             commands::moodle_check_site,
             commands::moodle_login,

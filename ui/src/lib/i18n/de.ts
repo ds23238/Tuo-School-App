@@ -71,6 +71,8 @@ export const de = {
     io: "Datei konnte nicht gelesen oder geschrieben werden",
     open: "Konnte nicht geöffnet werden",
     sync: "Synchronisation fehlgeschlagen",
+    autostart: "Autostart konnte nicht geändert werden",
+    autostartDenied: "Das System hat den Start im Hintergrund nicht erlaubt.",
   },
   moodle: {
     signIn: "Bei Moodle anmelden",

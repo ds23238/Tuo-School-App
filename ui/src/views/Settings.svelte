@@ -1,7 +1,6 @@
 <script lang="ts">
   import { getVersion } from "@tauri-apps/api/app";
   import { invoke } from "@tauri-apps/api/core";
-  import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { ask, open } from "@tauri-apps/plugin-dialog";
   import Icon from "../components/Icon.svelte";
   import { api, type Account, type Settings } from "../lib/api";
@@ -24,15 +23,16 @@
     return fill(i18n.t.settings.hours, { n: minutes / 60 });
   }
 
-  invoke<boolean>("autostart_supported").then(async (supported) => {
-    autostart = supported ? await isEnabled().catch(() => null) : null;
-  });
+  invoke<boolean>("autostart_enabled").then(
+    (v) => (autostart = v),
+    () => (autostart = null),
+  );
 
   function toggleAutostart() {
     const next = !autostart;
     run(async () => {
-      await (next ? enable() : disable());
-      autostart = await isEnabled();
+      await invoke("set_autostart", { enabled: next });
+      autostart = await invoke<boolean>("autostart_enabled");
     });
   }
   let error = $state<string | null>(null);

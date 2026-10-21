@@ -99,8 +99,14 @@ pub struct Client {
 
 impl Client {
     pub fn new(base: Url) -> Self {
+        // Moodle gibt Auto-Login-Schlüssel nur an Apps aus, die sich als
+        // Moodle-App ausweisen.
         let http = reqwest::Client::builder()
-            .user_agent(concat!("TSA-Sync/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!(
+                "TSA-Sync/",
+                env!("CARGO_PKG_VERSION"),
+                " MoodleMobile"
+            ))
             .build()
             .expect("HTTP-Client mit Standardeinstellungen");
         Self { http, base }

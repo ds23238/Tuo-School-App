@@ -73,11 +73,12 @@ fn size_hint(url: &Url) -> &'static str {
     }
 }
 
-/// Entfernt alles Ausführbare (Skripte, Event-Handler, iframes) und alle
-/// Styles außer Layout-Angaben; leitet Bilder über [`MediaUrls`] um. Links
-/// werden absolute Adressen.
+/// Entfernt alles Ausführbare (Skripte, Event-Handler) und alle Styles
+/// außer Layout-Angaben; leitet Bilder über [`MediaUrls`] um. iframes werden
+/// zu Links. Links werden absolute Adressen.
 pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
     let html = unescape_breaks(html);
+    let html = iframes_to_links(&html);
     let (base_for_images, media_for_images) = (base.clone(), media.clone());
     let schemes: HashSet<&str> = ["http", "https", "mailto", "tel", media.scheme].into();
     Builder::default()
@@ -86,6 +87,7 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         .link_rel(Some("noopener noreferrer"))
         .add_generic_attributes(["style"])
         .add_allowed_classes("img", ["icon", "iconlarge", "iconsmall"])
+        .add_allowed_classes("a", ["embed"])
         .add_tags(["video", "audio", "source", "track"])
         .add_tag_attributes(
             "video",
@@ -116,6 +118,86 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         })
         .clean(&html)
         .to_string()
+}
+
+/// Ersetzt eingebettete Seiten (Videos, H5P, Formulare …) durch einen Link
+/// darauf: Fremde Inhalte laufen nicht im App-Fenster, sind aber erreichbar.
+fn iframes_to_links(html: &str) -> std::borrow::Cow<'_, str> {
+    use std::sync::LazyLock;
+    static IFRAME: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?is)<iframe\b([^>]*)>(?:.*?</iframe\s*>)?").expect("gültiges Muster")
+    });
+    static ATTRIBUTE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"(?is)\b(src|title)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))"#)
+            .expect("gültiges Muster")
+    });
+    if !html.contains("<iframe") && !html.contains("<IFRAME") {
+        return html.into();
+    }
+    IFRAME.replace_all(html, |caps: &regex::Captures| {
+        let (mut src, mut title) = (None, None);
+        for attr in ATTRIBUTE.captures_iter(&caps[1]) {
+            let value = attr
+                .get(2)
+                .or(attr.get(3))
+                .or(attr.get(4))
+                .map_or("", |m| m.as_str());
+            let value = html_escape::decode_html_entities(value).trim().to_owned();
+            match attr[1].to_ascii_lowercase().as_str() {
+                "src" => src = Some(value),
+                _ => title = Some(value).filter(|t| !t.is_empty()),
+            }
+        }
+        let Some(src) = src.filter(|s| !s.is_empty()) else {
+            return String::new();
+        };
+        let href = watch_url(&src);
+        if Url::parse(&href).is_ok_and(|u| !matches!(u.scheme(), "http" | "https")) {
+            return String::new();
+        }
+        let label = title.unwrap_or_else(|| {
+            Url::parse(&href)
+                .ok()
+                .and_then(|u| {
+                    u.host_str()
+                        .map(|h| h.trim_start_matches("www.").to_owned())
+                })
+                .unwrap_or_else(|| href.clone())
+        });
+        format!(
+            r#"<p><a class="embed" href="{}">{}</a></p>"#,
+            html_escape::encode_double_quoted_attribute(&href),
+            html_escape::encode_text(&label)
+        )
+    })
+}
+
+/// Eingebettete YouTube- und Vimeo-Player als normale Seite öffnen.
+fn watch_url(src: &str) -> String {
+    let absolute = if src.starts_with("//") {
+        format!("https:{src}")
+    } else {
+        src.to_owned()
+    };
+    let Ok(url) = Url::parse(&absolute) else {
+        return src.to_owned();
+    };
+    let host = url
+        .host_str()
+        .unwrap_or_default()
+        .trim_start_matches("www.");
+    let id = url.path_segments().and_then(|mut s| match s.next() {
+        Some("embed") => s.next().map(str::to_owned),
+        Some("video") if host == "player.vimeo.com" => s.next().map(str::to_owned),
+        _ => None,
+    });
+    match (host, id) {
+        ("youtube.com" | "youtube-nocookie.com", Some(id)) => {
+            format!("https://www.youtube.com/watch?v={id}")
+        }
+        ("player.vimeo.com", Some(id)) => format!("https://vimeo.com/{id}"),
+        _ => absolute,
+    }
 }
 
 /// Macht als Text maskierte Zeilenumbrüche (`&lt;br /&gt;`) wieder zu echten.
@@ -171,9 +253,28 @@ mod tests {
     #[test]
     fn strips_active_content() {
         let out = clean(
-            r#"<p onclick="x()">Hi<script>alert(1)</script></p><iframe src="https://evil"></iframe>"#,
+            r#"<p onclick="x()">Hi<script>alert(1)</script></p><iframe srcdoc="<script>x()</script>"></iframe>"#,
         );
         assert_eq!(out, "<p>Hi</p>");
+    }
+
+    #[test]
+    fn iframes_become_links() {
+        let out = clean(
+            r#"<iframe width="560" src="https://www.youtube.com/embed/abc123?si=x" title="Mein &amp; Video"></iframe><IFRAME SRC='//h5p.example/x'>"#,
+        );
+        assert_eq!(
+            out,
+            concat!(
+                r#"<p><a class="embed" href="https://www.youtube.com/watch?v=abc123" rel="noopener noreferrer">Mein &amp; Video</a></p>"#,
+                r#"<p><a class="embed" href="https://h5p.example/x" rel="noopener noreferrer">h5p.example</a></p>"#
+            )
+        );
+        assert_eq!(clean(r#"<iframe src="javascript:alert(1)"></iframe>"#), "");
+        assert!(
+            clean(r#"<iframe src="/mod/hvp/embed.php?id=3"></iframe>"#)
+                .contains(r#"href="https://moodle.example/mod/hvp/embed.php?id=3""#)
+        );
     }
 
     #[test]

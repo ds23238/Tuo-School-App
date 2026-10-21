@@ -11,7 +11,7 @@ use tsa_moodle::sync::{CourseFiles, course_dir};
 use tsa_moodle::{Course, Session};
 
 use crate::error::Result;
-use crate::{AppState, background, launch, media, tray};
+use crate::{AppState, autostart, background, launch, media, tray};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings> {
@@ -261,10 +261,18 @@ pub async fn open_url(app: AppHandle, url: String) -> Result<()> {
     launch::url(&app, &url).await
 }
 
-/// Im Flatpak gibt es keinen Autostart-Eintrag, der von außen startbar wäre.
 #[tauri::command]
-pub fn autostart_supported() -> bool {
-    std::env::var_os("FLATPAK_ID").is_none()
+pub fn autostart_enabled(app: AppHandle, state: State<'_, AppState>) -> Result<bool> {
+    autostart::enabled(&app, &state)
+}
+
+#[tauri::command]
+pub async fn set_autostart(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> Result<()> {
+    autostart::set(&app, &state, enabled).await
 }
 
 /// Die Grafik-Einstellung gibt es nur unter Linux (WebKitGTK).
