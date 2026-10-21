@@ -1,14 +1,38 @@
 <script lang="ts">
   import { getVersion } from "@tauri-apps/api/app";
+  import { invoke } from "@tauri-apps/api/core";
+  import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
   import { ask, open } from "@tauri-apps/plugin-dialog";
   import Icon from "../components/Icon.svelte";
   import { api, type Account, type Settings } from "../lib/api";
   import { errorText } from "../lib/errors";
+  import { fill, formatDate } from "../lib/format";
   import { i18n, locales } from "../lib/i18n/index.svelte";
+  import { sync } from "../lib/sync.svelte";
 
   let settings = $state<Settings | null>(null);
   let accounts = $state<Account[]>([]);
   let keyringOk = $state(true);
+  let autostart = $state<boolean | null>(null);
+  const intervals = [15, 30, 60, 120, 240];
+
+  function intervalLabel(minutes: number): string {
+    if (minutes < 60) return fill(i18n.t.settings.minutes, { n: minutes });
+    if (minutes === 60) return i18n.t.settings.hour;
+    return fill(i18n.t.settings.hours, { n: minutes / 60 });
+  }
+
+  invoke<boolean>("autostart_supported").then(async (supported) => {
+    autostart = supported ? await isEnabled().catch(() => null) : null;
+  });
+
+  function toggleAutostart() {
+    const next = !autostart;
+    run(async () => {
+      await (next ? enable() : disable());
+      autostart = await isEnabled();
+    });
+  }
   let error = $state<string | null>(null);
   const version = getVersion().catch(() => "–");
 
@@ -81,6 +105,68 @@
           <code>{settings.syncDir}</code>
           <button class="btn small" onclick={chooseSyncDir}><Icon name="folder" size={14} />{i18n.t.settings.change}</button>
         </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>{i18n.t.settings.sync}</h2>
+      <div class="row">
+        <div>
+          <div>{i18n.t.settings.autoSync}</div>
+          <div class="muted small">{i18n.t.settings.autoSyncHint}</div>
+        </div>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked={settings.syncEnabled}
+          aria-label={i18n.t.settings.autoSync}
+          onclick={() => update({ syncEnabled: !settings!.syncEnabled })}
+        ></button>
+      </div>
+      <div class="row">
+        <label for="interval">{i18n.t.settings.interval}</label>
+        <select
+          id="interval"
+          value={settings.syncIntervalMinutes}
+          disabled={!settings.syncEnabled}
+          onchange={(e) => update({ syncIntervalMinutes: Number(e.currentTarget.value) })}
+        >
+          {#each intervals as m (m)}
+            <option value={m}>{intervalLabel(m)}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="row">
+        <div>
+          <div>{i18n.t.settings.notifications}</div>
+          <div class="muted small">{i18n.t.settings.notificationsHint}</div>
+        </div>
+        <button
+          class="switch"
+          role="switch"
+          aria-checked={settings.notifications}
+          aria-label={i18n.t.settings.notifications}
+          onclick={() => update({ notifications: !settings!.notifications })}
+        ></button>
+      </div>
+      {#if autostart !== null}
+        <div class="row">
+          <div>
+            <div>{i18n.t.settings.autostart}</div>
+            <div class="muted small">{i18n.t.settings.autostartHint}</div>
+          </div>
+          <button
+            class="switch"
+            role="switch"
+            aria-checked={autostart}
+            aria-label={i18n.t.settings.autostart}
+            onclick={toggleAutostart}
+          ></button>
+        </div>
+      {/if}
+      <div class="row">
+        <span>{i18n.t.settings.lastSync}</span>
+        <span class="muted">{sync.lastAt ? formatDate(sync.lastAt.getTime() / 1000) : "–"}</span>
       </div>
     </section>
 

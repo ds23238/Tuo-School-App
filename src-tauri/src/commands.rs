@@ -11,7 +11,7 @@ use tsa_moodle::sync::{CourseFiles, course_dir};
 use tsa_moodle::{Course, Session};
 
 use crate::error::Result;
-use crate::{AppState, launch, media};
+use crate::{AppState, background, launch, media, tray};
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Result<Settings> {
@@ -19,8 +19,11 @@ pub fn get_settings(state: State<AppState>) -> Result<Settings> {
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<AppState>, settings: Settings) -> Result<()> {
-    Ok(settings.save(&state.db)?)
+pub fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> Result<()> {
+    settings.save(&state.db)?;
+    state.background.wake();
+    tray::refresh(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -113,17 +116,30 @@ pub fn moodle_file_stats(state: State<AppState>) -> Result<HashMap<i64, CourseFi
     Ok(moodle(&state).file_stats()?)
 }
 
-/// Synchronisiert alle ausgewählten Kurse.
 #[tauri::command]
-pub async fn moodle_sync(state: State<'_, AppState>) -> Result<Vec<CourseSync>> {
-    let root = sync_dir(&state)?;
-    Ok(moodle(&state).sync_all(&root).await?)
+pub fn sync_status(state: State<AppState>) -> background::Status {
+    state.background.status()
+}
+
+/// Synchronisiert alle ausgewählten Kurse; Fortschritt kommt als Event.
+#[tauri::command]
+pub async fn sync_now(app: AppHandle) -> Result<Vec<CourseSync>> {
+    background::run(&app)
+        .await
+        .map_err(|e| crate::error::CommandError::new("sync", e))
+}
+
+/// Merkt sich den Besuch (für „zuletzt geöffnet“) und meldet ihn Moodle.
+#[tauri::command]
+pub async fn moodle_course_viewed(state: State<'_, AppState>, id: i64) -> Result<()> {
+    Ok(moodle(&state).course_viewed(id).await?)
 }
 
 #[tauri::command]
-pub async fn moodle_sync_course(state: State<'_, AppState>, id: i64) -> Result<usize> {
-    let root = sync_dir(&state)?;
-    Ok(moodle(&state).sync_course(id, &root).await?)
+pub async fn moodle_sync_course(app: AppHandle, id: i64) -> Result<usize> {
+    background::run_course(&app, id)
+        .await
+        .map_err(|e| crate::error::CommandError::new("sync", e))
 }
 
 /// Öffnet die lokale Kopie; lädt sie vorher, falls nötig.
@@ -243,4 +259,10 @@ pub async fn moodle_open_assignment_file(
 #[tauri::command]
 pub async fn open_url(app: AppHandle, url: String) -> Result<()> {
     launch::url(&app, &url).await
+}
+
+/// Im Flatpak gibt es keinen Autostart-Eintrag, der von außen startbar wäre.
+#[tauri::command]
+pub fn autostart_supported() -> bool {
+    std::env::var_os("FLATPAK_ID").is_none()
 }

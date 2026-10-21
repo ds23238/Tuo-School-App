@@ -18,3 +18,7 @@ tsa-moodle.workspace = true
 tauri-plugin-opener.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["fs", "process", "time"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+sys-locale = "0.3"

@@ -155,6 +155,15 @@ impl Course {
         Ok(())
     }
 
+    /// Merkt sich, dass der Kurs gerade geöffnet wurde (für „zuletzt geöffnet“).
+    pub fn touch(db: &Database, id: i64) -> Result<()> {
+        db.conn().execute(
+            "UPDATE moodle_courses SET last_access = ?2 WHERE id = ?1",
+            (id, crate::contents::now()),
+        )?;
+        Ok(())
+    }
+
     pub fn clear(db: &Database) -> Result<()> {
         db.conn().execute("DELETE FROM moodle_courses", [])?;
         Ok(())

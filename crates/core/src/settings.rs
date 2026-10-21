@@ -13,6 +13,11 @@ pub struct Settings {
     /// `None` = Systemsprache.
     pub locale: Option<String>,
     pub sync_dir: PathBuf,
+    /// Automatisch im Hintergrund synchronisieren, solange die App läuft.
+    pub sync_enabled: bool,
+    pub sync_interval_minutes: u32,
+    /// Systembenachrichtigungen bei neuen Dateien.
+    pub notifications: bool,
 }
 
 impl Settings {
@@ -20,6 +25,9 @@ impl Settings {
         Self {
             locale: None,
             sync_dir: default_sync_dir.to_path_buf(),
+            sync_enabled: true,
+            sync_interval_minutes: 30,
+            notifications: true,
         }
     }
 
@@ -50,6 +58,27 @@ impl Settings {
     }
 }
 
+/// Einzelner gespeicherter Wert außerhalb der Einstellungen, z. B. der
+/// Zeitpunkt des letzten Syncs. Getrennt, damit das Speichern der
+/// Einstellungen aus der Oberfläche ihn nicht überschreibt.
+pub fn get_value(db: &Database, key: &str) -> Result<Option<String>> {
+    Ok(db
+        .conn()
+        .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
+            r.get(0)
+        })
+        .optional()?)
+}
+
+pub fn set_value(db: &Database, key: &str, value: &str) -> Result<()> {
+    db.conn().execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,9 +96,21 @@ mod tests {
         let s = Settings {
             locale: Some("en".into()),
             sync_dir: "/elsewhere".into(),
+            sync_enabled: false,
+            sync_interval_minutes: 60,
+            notifications: false,
         };
         s.save(&db).unwrap();
         assert_eq!(Settings::load(&db, Path::new("/sync")).unwrap(), s);
+    }
+
+    #[test]
+    fn values_are_separate() {
+        let db = Database::open_in_memory().unwrap();
+        set_value(&db, "last_sync", "42").unwrap();
+        Settings::defaults(Path::new("/s")).save(&db).unwrap();
+        assert_eq!(get_value(&db, "last_sync").unwrap().as_deref(), Some("42"));
+        assert_eq!(get_value(&db, "nope").unwrap(), None);
     }
 
     #[test]

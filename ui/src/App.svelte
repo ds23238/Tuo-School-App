@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "./components/Icon.svelte";
-  import { fill, formatTime } from "./lib/format";
+  import { fill, formatDate, formatTime } from "./lib/format";
   import { i18n } from "./lib/i18n/index.svelte";
   import { nav, type View } from "./lib/nav.svelte";
   import { sync } from "./lib/sync.svelte";
@@ -18,7 +18,11 @@
   const status = $derived.by(() => {
     if (sync.running) return i18n.t.sync.running;
     if (sync.error) return i18n.t.sync.failed;
-    if (sync.lastAt) return fill(i18n.t.sync.done, { time: formatTime(sync.lastAt) });
+    if (sync.lastAt) {
+      const today = sync.lastAt.toDateString() === new Date().toDateString();
+      const time = today ? formatTime(sync.lastAt) : formatDate(sync.lastAt.getTime() / 1000);
+      return fill(i18n.t.sync.done, { time });
+    }
     return i18n.t.sync.never;
   });
 </script>

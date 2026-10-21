@@ -292,6 +292,19 @@ impl<'a> Session<'a> {
         }
     }
 
+    /// Meldet Moodle den Besuch eines Kurses, wie es Browser und Moodle-App
+    /// tun. Das zählt z. B. für Abschlussbedingungen „Kurs angesehen“.
+    pub async fn course_viewed(&self, course_id: i64) -> Result<()> {
+        Course::touch(self.db, course_id)?;
+        let _: serde_json::Value = self
+            .call(
+                "core_course_view_course",
+                &[("courseid", course_id.to_string())],
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Setzt den manuellen Abschluss einer Aktivität.
     pub async fn set_completion(&self, module_id: i64, completed: bool) -> Result<()> {
         let _: serde_json::Value = self

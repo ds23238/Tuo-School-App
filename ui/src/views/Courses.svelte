@@ -12,6 +12,23 @@
   import PageView from "./PageView.svelte";
 
   type Filter = "current" | "past" | "all";
+  type Sort = "name" | "nameDesc" | "recent" | "progress" | "start";
+
+  /** Auswahl bleibt pro Gerät erhalten; ohne Speicher gilt der Standard. */
+  function stored<T extends string>(key: string, fallback: T): T {
+    try {
+      return (localStorage.getItem(key) as T | null) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  function store(key: string, value: string) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Dann gilt die Auswahl nur bis zum Neustart.
+    }
+  }
 
   let account = $state<Account | null>(null);
   let courses = $state<Course[]>([]);
@@ -20,15 +37,47 @@
   let refreshing = $state(false);
   let expired = $state(false);
   let error = $state<string | null>(null);
-  let filter = $state<Filter>("current");
+  let filter = $state<Filter>(stored("courses.filter", "current"));
+  let sort = $state<Sort>(stored("courses.sort", "name"));
+  let query = $state("");
+
+  $effect(() => store("courses.filter", filter));
+  $effect(() => store("courses.sort", sort));
+
+  /** Für die Suche: klein, ohne Akzente („Französisch“ findet „franzosisch“). */
+  const fold = (s: string) =>
+    s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+
+  const sorters: Record<Sort, (a: Course, b: Course) => number> = {
+    name: (a, b) => a.fullName.localeCompare(b.fullName, i18n.locale),
+    nameDesc: (a, b) => b.fullName.localeCompare(a.fullName, i18n.locale),
+    recent: (a, b) => (b.lastAccess ?? 0) - (a.lastAccess ?? 0),
+    progress: (a, b) => (b.progress ?? -1) - (a.progress ?? -1),
+    start: (a, b) => (b.startDate ?? 0) - (a.startDate ?? 0),
+  };
 
   const now = Date.now() / 1000;
   const isPast = (c: Course) => !!c.endDate && c.endDate < now;
-  const shown = $derived(
+  const inFilter = $derived(
     courses.filter((c) =>
       filter === "all" ? true : filter === "past" ? isPast(c) : !isPast(c) && (c.enrolled || c.sync),
     ),
   );
+  const shown = $derived.by(() => {
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    return inFilter
+      .filter((c) => {
+        const text = fold(`${c.fullName} ${c.shortName}`);
+        return words.every((w) => text.includes(w));
+      })
+      .sort(sorters[sort]);
+  });
+
+  function open(course: Course) {
+    course.lastAccess = Math.floor(Date.now() / 1000);
+    api.moodle.courseViewed(course.id).catch(() => {});
+    nav.openCourse(course);
+  }
 
   async function load() {
     try {
@@ -127,17 +176,39 @@
         </button>
       </div>
     </header>
+    <div class="tools">
+      <label class="search">
+        <Icon name="search" size={18} />
+        <input
+          type="search"
+          bind:value={query}
+          placeholder={i18n.t.courses.search}
+          aria-label={i18n.t.courses.search}
+        />
+      </label>
+      <label class="sort">
+        <Icon name="sort" size={16} />
+        <select bind:value={sort} aria-label={i18n.t.courses.sort} title={i18n.t.courses.sort}>
+          <option value="name">{i18n.t.courses.sortName}</option>
+          <option value="nameDesc">{i18n.t.courses.sortNameDesc}</option>
+          <option value="recent">{i18n.t.courses.sortRecent}</option>
+          <option value="start">{i18n.t.courses.sortStart}</option>
+          <option value="progress">{i18n.t.courses.sortProgress}</option>
+        </select>
+        <Icon name="chevronDown" size={16} />
+      </label>
+    </div>
     {#if error}<p class="notice error">{error}</p>{/if}
 
     {#if shown.length === 0 && !refreshing}
-      <p class="muted">{i18n.t.courses.empty}</p>
+      <p class="muted">{query ? i18n.t.courses.noMatch : i18n.t.courses.empty}</p>
     {:else}
       <div class="grid">
         {#each shown as course (course.id)}
           <CourseCard
             {course}
             files={stats[course.id]}
-            onopen={() => nav.openCourse(course)}
+            onopen={() => open(course)}
             ontoggle={() => toggle(course)}
           />
         {/each}
@@ -190,6 +261,61 @@
     background: var(--text);
     border-color: var(--text);
     color: var(--bg);
+  }
+  .tools {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .search {
+    flex: 1;
+    min-width: 220px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .search:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .search input {
+    flex: 1;
+    border: 0;
+    padding: 10px 0;
+    background: none;
+    outline: none;
+    color: var(--text);
+  }
+  .sort {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .sort select {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: none;
+    padding: 10px 0;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .sort select:focus-visible {
+    outline: none;
+  }
+  .sort:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .grid {
     display: grid;
