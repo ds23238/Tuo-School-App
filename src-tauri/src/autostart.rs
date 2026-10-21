@@ -5,8 +5,8 @@ use tauri::AppHandle;
 use tauri_plugin_autostart::ManagerExt;
 use tsa_core::settings::{get_value, set_value};
 
+use crate::AppState;
 use crate::error::{CommandError, Result};
-use crate::{AppState, MINIMIZED};
 
 const FLATPAK_KEY: &str = "autostart";
 
@@ -40,6 +40,7 @@ pub async fn set(app: &AppHandle, state: &AppState, enabled: bool) -> Result<()>
 
 #[cfg(target_os = "linux")]
 async fn portal(enabled: bool) -> Result<()> {
+    use crate::MINIMIZED;
     use ashpd::desktop::background::Background;
     let error = |e: ashpd::Error| CommandError::new("autostart", e.to_string());
     let response = Background::request()
