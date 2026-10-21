@@ -72,7 +72,10 @@ fn rpc_result(value: Value) -> Result<Value> {
 
 /// Sucht Schulen nach Name oder Ort.
 pub async fn search_schools(query: &str) -> Result<Vec<School>> {
-    search_schools_at(SCHOOL_SEARCH, query).await
+    // Für Tests gegen einen nachgebauten Server.
+    let endpoint =
+        std::env::var("TSA_UNTIS_SCHOOL_SEARCH").unwrap_or_else(|_| SCHOOL_SEARCH.into());
+    search_schools_at(&endpoint, query).await
 }
 
 pub async fn search_schools_at(endpoint: &str, query: &str) -> Result<Vec<School>> {

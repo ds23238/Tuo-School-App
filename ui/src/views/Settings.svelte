@@ -3,7 +3,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import { ask, open } from "@tauri-apps/plugin-dialog";
   import Icon from "../components/Icon.svelte";
-  import { api, type Account, type Settings } from "../lib/api";
+  import { api, type Account, type Course, type Settings } from "../lib/api";
+  import { nav } from "../lib/nav.svelte";
+  import { mapping } from "../lib/untis.svelte";
   import { errorText } from "../lib/errors";
   import { fill, formatDate } from "../lib/format";
   import { i18n, locales } from "../lib/i18n/index.svelte";
@@ -11,6 +13,7 @@
 
   let settings = $state<Settings | null>(null);
   let accounts = $state<Account[]>([]);
+  let courses = $state<Course[]>([]);
   let keyringOk = $state(true);
   let autostart = $state<boolean | null>(null);
   let graphicsConfigurable = $state(false);
@@ -49,6 +52,10 @@
 
   run(async () => {
     [settings, accounts] = await Promise.all([api.getSettings(), api.listAccounts()]);
+    if (accounts.some((a) => a.service === "untis")) {
+      mapping.load();
+      courses = (await api.moodle.courses()).filter((c) => c.enrolled);
+    }
     keyringOk = await api.checkKeyring().then(
       () => true,
       () => false,
@@ -201,7 +208,53 @@
       {:else}
         <p class="muted">{i18n.t.settings.noAccounts}</p>
       {/each}
+      {#each (["moodle", "untis"] as const).filter((s) => !accounts.some((a) => a.service === s)) as service (service)}
+        <div class="row">
+          <div class="strong">{i18n.t.service[service]}</div>
+          <button class="btn small primary" onclick={() => nav.go(service === "moodle" ? "courses" : "timetable")}>
+            {i18n.t.today.connect}
+          </button>
+        </div>
+      {/each}
     </section>
+
+    {#if accounts.some((a) => a.service === "untis") && accounts.some((a) => a.service === "moodle")}
+      <section class="card">
+        <h2>{i18n.t.mapping.title}</h2>
+        <p class="muted small hint">{i18n.t.mapping.hint}</p>
+        {#each mapping.entries as entry (entry.subject)}
+          <div class="row">
+            <div>
+              <div class="strong">{entry.longName}</div>
+              <div class="muted small">{entry.subject}</div>
+            </div>
+            <div class="value">
+              {#if entry.suggested && entry.courseId}
+                <span class="pill accent">{i18n.t.mapping.suggested}</span>
+                <button class="btn small" onclick={() => mapping.set(entry.subject, entry.courseId)}>
+                  {i18n.t.mapping.confirm}
+                </button>
+              {/if}
+              <select
+                value={entry.courseId ?? ""}
+                onchange={(e) => {
+                  const v = (e.currentTarget as HTMLSelectElement).value;
+                  mapping.set(entry.subject, v ? Number(v) : null);
+                }}
+                aria-label={entry.longName}
+              >
+                <option value="">{i18n.t.mapping.none}</option>
+                {#each courses as c (c.id)}
+                  <option value={c.id}>{c.fullName}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        {:else}
+          <p class="muted">{i18n.t.mapping.empty}</p>
+        {/each}
+      </section>
+    {/if}
 
     <section class="card">
       <h2>{i18n.t.settings.about}</h2>
@@ -264,6 +317,12 @@
   }
   p {
     margin: 0;
+  }
+  .hint {
+    margin: 0 0 8px;
+  }
+  .value select {
+    max-width: 280px;
   }
   section > p {
     padding: 12px 0;

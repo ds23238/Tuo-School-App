@@ -7,8 +7,9 @@
   import { inbox } from "./lib/inbox.svelte";
   import Courses from "./views/Courses.svelte";
   import Messages from "./views/Messages.svelte";
-  import Placeholder from "./views/Placeholder.svelte";
   import Settings from "./views/Settings.svelte";
+  import Timetable from "./views/Timetable.svelte";
+  import Today from "./views/Today.svelte";
 
   const items: { view: View; icon: string }[] = [
     { view: "today", icon: "today" },
@@ -108,8 +109,10 @@
       <Messages />
     {:else if nav.view === "settings"}
       <Settings />
+    {:else if nav.view === "timetable"}
+      <Timetable />
     {:else}
-      <Placeholder icon={nav.view} title={i18n.t.nav[nav.view]} text={i18n.t.placeholder[nav.view as "today" | "timetable"]} />
+      <Today />
     {/if}
   </main>
 </div>

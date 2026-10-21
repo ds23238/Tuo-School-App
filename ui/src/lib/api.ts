@@ -181,6 +181,129 @@ export interface Counts {
   notifications: number;
   /** `null` ohne Moodle-Mail. */
   mail: number | null;
+  /** Ungelesene Untis-Mitteilungen, `null` ohne WebUntis-Konto. */
+  untis: number | null;
+}
+
+export interface School {
+  server: string;
+  loginName: string;
+  displayName: string;
+  address: string;
+}
+
+export interface UntisElement {
+  name: string;
+  longName: string;
+  /** Ursprünglich geplant, z. B. vertretene Lehrkraft. */
+  previous: string | null;
+}
+
+export type LessonStatus = "regular" | "cancelled" | "changed" | "exam" | "other";
+
+export interface Lesson {
+  id: number;
+  /** ISO-Datum. */
+  date: string;
+  /** `HH:MM`. */
+  start: string;
+  end: string;
+  subject: UntisElement | null;
+  teachers: UntisElement[];
+  rooms: UntisElement[];
+  classes: UntisElement[];
+  status: LessonStatus;
+  text: string | null;
+  info: string | null;
+  substitution: string | null;
+}
+
+export interface Week {
+  monday: string;
+  days: { date: string; holiday: string | null }[];
+  lessons: Lesson[];
+  grid: { name: string; start: string; end: string }[];
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface Listed<T> {
+  items: T[];
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface Homework {
+  id: number;
+  subject: string | null;
+  teacher: string | null;
+  assigned: string;
+  due: string;
+  text: string;
+  remark: string | null;
+  done: boolean;
+  attachments: string[];
+}
+
+export interface Exam {
+  id: number;
+  kind: string | null;
+  name: string;
+  subject: string | null;
+  date: string;
+  start: string | null;
+  end: string | null;
+  teachers: string[];
+  rooms: string[];
+  text: string | null;
+  grade: string | null;
+}
+
+export interface UntisMessage {
+  id: number;
+  subject: string;
+  preview: string;
+  sender: string;
+  sent: string;
+  read: boolean;
+  attachments: boolean;
+}
+
+export interface UntisMessageDetail {
+  id: number;
+  subject: string;
+  html: string;
+  sender: string;
+  sent: string;
+  attachments: string[];
+}
+
+export interface Deadline {
+  id: number;
+  name: string;
+  kind: string;
+  courseId: number;
+  course: string;
+  moduleId: number | null;
+  /** Unix-Zeit. */
+  time: number;
+  url: string | null;
+}
+
+export interface RecentFile {
+  id: number;
+  courseId: number;
+  course: string;
+  name: string;
+  downloadedAt: number;
+}
+
+export interface MappingEntry {
+  subject: string;
+  longName: string;
+  courseId: number | null;
+  /** Vorschlag, noch nicht bestätigt. */
+  suggested: boolean;
 }
 
 export interface Member {
@@ -399,6 +522,38 @@ export const api = {
     notifications: () => invoke<MoodleNotification[]>("moodle_notifications"),
     markNotificationRead: (id: number) => invoke<void>("moodle_mark_notification_read", { id }),
     markAllNotificationsRead: () => invoke<void>("moodle_mark_all_notifications_read"),
+  },
+
+  untis: {
+    search: (query: string) => invoke<School[]>("untis_search", { query }),
+    login: (school: School, username: string, password: string, remember: boolean) =>
+      invoke<{ account: Account; persistent: boolean }>("untis_login", {
+        school,
+        username,
+        password,
+        remember,
+      }),
+    week: (date: string) => invoke<Week>("untis_week", { date }),
+    upcoming: () => invoke<Lesson[]>("untis_upcoming"),
+    homework: () => invoke<Listed<Homework>>("untis_homework"),
+    setHomeworkDone: (id: number, done: boolean) =>
+      invoke<void>("untis_set_homework_done", { id, done }),
+    exams: () => invoke<Listed<Exam>>("untis_exams"),
+    messages: () => invoke<UntisMessage[]>("untis_messages"),
+    message: (id: number) => invoke<UntisMessageDetail>("untis_message", { id }),
+    dayNews: () => invoke<{ subject: string; html: string }[]>("untis_day_news"),
+    openWeb: () => invoke<void>("untis_open_web"),
+  },
+
+  today: {
+    deadlines: () => invoke<Deadline[]>("moodle_deadlines"),
+    recentFiles: () => invoke<RecentFile[]>("moodle_recent_files"),
+  },
+
+  mapping: {
+    list: () => invoke<MappingEntry[]>("mapping_list"),
+    set: (subject: string, courseId: number | null) =>
+      invoke<void>("mapping_set", { subject, courseId }),
   },
 
   mail: {

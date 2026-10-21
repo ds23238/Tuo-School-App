@@ -4,7 +4,7 @@ export type View = "today" | "courses" | "messages" | "timetable" | "settings";
 
 /** Aktuelle Ansicht; Kurs und Aktivität nur innerhalb von „Kurse“. */
 class Nav {
-  view = $state<View>("courses");
+  view = $state<View>("today");
   course = $state<Course | null>(null);
   module = $state<Module | null>(null);
 
