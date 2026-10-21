@@ -77,6 +77,7 @@ fn size_hint(url: &Url) -> &'static str {
 /// Styles außer Layout-Angaben; leitet Bilder über [`MediaUrls`] um. Links
 /// werden absolute Adressen.
 pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
+    let html = unescape_breaks(html);
     let (base_for_images, media_for_images) = (base.clone(), media.clone());
     let schemes: HashSet<&str> = ["http", "https", "mailto", "tel", media.scheme].into();
     Builder::default()
@@ -113,8 +114,39 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
             }
             Some(value.into())
         })
-        .clean(html)
+        .clean(&html)
         .to_string()
+}
+
+/// Macht als Text maskierte Zeilenumbrüche (`&lt;br /&gt;`) wieder zu echten.
+/// Solche Texte entstehen, wenn HTML in den Editor kopiert wurde.
+fn unescape_breaks(html: &str) -> std::borrow::Cow<'_, str> {
+    if !html.contains("&lt;") {
+        return html.into();
+    }
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find("&lt;") {
+        out.push_str(&rest[..start]);
+        let tail = &rest[start + 4..];
+        let end = tail.find("&gt;").filter(|&e| e <= 8);
+        let tag = end.map(|e| {
+            tail[..e]
+                .trim()
+                .trim_end_matches('/')
+                .trim()
+                .to_ascii_lowercase()
+        });
+        if let (Some(e), Some("br")) = (end, tag.as_deref()) {
+            out.push_str("<br>");
+            rest = &tail[e + 4..];
+        } else {
+            out.push_str("&lt;");
+            rest = tail;
+        }
+    }
+    out.push_str(rest);
+    out.into()
 }
 
 #[cfg(test)]
@@ -189,6 +221,14 @@ mod tests {
         );
         assert!(out.contains(r##"#icon">"##), "{out}");
         assert!(out.contains(r##"#svg">"##), "{out}");
+    }
+
+    #[test]
+    fn escaped_breaks_become_real() {
+        assert_eq!(
+            clean("<p>Eins&lt;br&gt;Zwei&lt;BR /&gt;Drei &lt;b&gt;fett&lt;/b&gt; a &lt; b</p>"),
+            "<p>Eins<br>Zwei<br>Drei &lt;b&gt;fett&lt;/b&gt; a &lt; b</p>"
+        );
     }
 
     #[test]
