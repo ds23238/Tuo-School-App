@@ -35,6 +35,15 @@ impl From<tsa_moodle::Error> for CommandError {
     }
 }
 
+impl From<tsa_untis::Error> for CommandError {
+    fn from(e: tsa_untis::Error) -> Self {
+        Self {
+            code: e.code(),
+            message: e.to_string(),
+        }
+    }
+}
+
 impl From<tauri_plugin_opener::Error> for CommandError {
     fn from(e: tauri_plugin_opener::Error) -> Self {
         Self {

@@ -5,9 +5,11 @@ mod error;
 mod graphics;
 mod inbox;
 mod launch;
+mod mapping;
 mod media;
 mod texts;
 mod tray;
+mod untis;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -22,6 +24,7 @@ pub struct AppState {
     pub background: background::Background,
     pub inbox: inbox::Inbox,
     pub mail: tsa_moodle::mail::MailState,
+    pub untis: tsa_untis::UntisState,
     /// Ohne Tray-Symbol beendet Schließen die App, statt sie zu verstecken.
     pub has_tray: AtomicBool,
 }
@@ -53,6 +56,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let db = Database::open(&data_dir.join("tsa-sync.db"))?;
             tsa_moodle::init(&db)?;
+            tsa_untis::init(&db)?;
             app.manage(AppState {
                 db,
                 secrets: Box::new(KeyringStore),
@@ -60,6 +64,7 @@ pub fn run() {
                 background: background::Background::default(),
                 inbox: inbox::Inbox::default(),
                 mail: tsa_moodle::mail::MailState::default(),
+                untis: tsa_untis::UntisState::default(),
                 has_tray: AtomicBool::new(false),
             });
             app.manage(tray::Tray::default());
@@ -153,6 +158,21 @@ pub fn run() {
             commands::mail_draft,
             commands::mail_save,
             commands::mail_open_attachment,
+            untis::untis_search,
+            untis::untis_login,
+            untis::untis_week,
+            untis::untis_upcoming,
+            untis::untis_homework,
+            untis::untis_set_homework_done,
+            untis::untis_exams,
+            untis::untis_messages,
+            untis::untis_message,
+            untis::untis_day_news,
+            untis::untis_open_web,
+            untis::moodle_deadlines,
+            untis::moodle_recent_files,
+            untis::mapping_list,
+            untis::mapping_set,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri-Anwendung konnte nicht gestartet werden");

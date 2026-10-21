@@ -4,6 +4,7 @@ pub mod assign;
 pub mod client;
 pub mod contents;
 pub mod courses;
+pub mod deadlines;
 pub mod error;
 pub mod html;
 pub mod mail;
@@ -69,6 +70,7 @@ const MIGRATIONS: &[&str] = &[
         json       TEXT NOT NULL,
         fetched_at INTEGER NOT NULL
     );",
+    "ALTER TABLE moodle_files ADD COLUMN downloaded_at INTEGER;",
 ];
 
 /// Moodle liefert Namen als HTML-Text, z. B. `Kunst &amp; Musik`.

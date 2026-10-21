@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.85"
@@ -11,6 +11,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 tsa-core = { path = "crates/core" }
 tsa-moodle = { path = "crates/moodle" }
+tsa-untis = { path = "crates/untis" }
 keyring = { version = "3.6", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 tempfile = "3"
