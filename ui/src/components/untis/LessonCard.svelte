@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Lesson } from "../../lib/api";
-  import { subjectHue } from "../../lib/untis.svelte";
+  import { lessonState, subjectHue } from "../../lib/untis.svelte";
 
   /** Eine Stunde im Raster: Fach, Raum, Lehrkraft; Änderungen farbig. */
   let {
@@ -15,7 +15,7 @@
 </script>
 
 <button
-  class="lesson {lesson.status}"
+  class="lesson {lesson.status} {lessonState(lesson)}"
   class:selected
   style="--hue:{hue}"
   onclick={onselect}
@@ -80,6 +80,10 @@
   .changed {
     border-left-color: var(--accent);
     background: var(--accent-soft);
+  }
+  .noTeacher {
+    border-left-color: var(--danger);
+    background: var(--danger-soft);
   }
   .exam {
     border-left-color: var(--p-assessment);

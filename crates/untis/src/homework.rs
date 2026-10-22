@@ -251,26 +251,49 @@ impl Session<'_> {
         Ok(())
     }
 
-    /// Prüfungen der letzten Woche und der nächsten vier Monate.
+    async fn exam_query(&self, query: &[(&str, String)]) -> Result<Vec<RemoteExam>> {
+        let data: Data<Exams> = self.rest(false, "WebUntis/api/exams", query).await?;
+        Ok(data.data.exams)
+    }
+
+    /// Prüfungen des letzten Monats und der nächsten sechs Monate. Schulen
+    /// liefern sie je nach Einstellung nur für die Person oder nur für die
+    /// Klasse, manche tragen sie nur im Stundenplan ein; daher alles zusammen.
     pub async fn exams(&self, today: NaiveDate) -> Result<Listed<Exam>> {
         let person = self.person()?;
+        let from = today - Days::new(30);
+        let to = today + Days::new(180);
         let fetch = async {
-            let data: Data<Exams> = self
-                .rest(
-                    false,
-                    "WebUntis/api/exams",
-                    &[
-                        ("studentId", person.id.to_string()),
-                        ("klasseId", person.klasse_id.unwrap_or(-1).to_string()),
-                        ("startDate", untis_date(today - Days::new(7))),
-                        ("endDate", untis_date(today + Days::new(120))),
-                        ("withGrades", "true".into()),
-                    ],
-                )
-                .await?;
-            let mut exams: Vec<Exam> = data
-                .data
-                .exams
+            let range = [
+                ("startDate", untis_date(from)),
+                ("endDate", untis_date(to)),
+                ("withGrades", "true".to_owned()),
+            ];
+            let mut queries = vec![vec![
+                ("studentId", person.id.to_string()),
+                ("klasseId", "-1".to_owned()),
+            ]];
+            if let Some(klasse) = person.klasse_id {
+                queries.push(vec![("klasseId", klasse.to_string())]);
+            }
+            let mut remote: Vec<RemoteExam> = Vec::new();
+            let mut first_error = None;
+            for mut query in queries {
+                query.extend(range.iter().cloned());
+                match self.exam_query(&query).await {
+                    Ok(found) => {
+                        for e in found {
+                            if !remote.iter().any(|r| r.id == e.id) {
+                                remote.push(e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        first_error.get_or_insert(e);
+                    }
+                }
+            }
+            let mut exams: Vec<Exam> = remote
                 .into_iter()
                 .map(|e| Exam {
                     id: e.id,
@@ -286,6 +309,37 @@ impl Session<'_> {
                     grade: e.grade.filter(|g| !g.is_empty()),
                 })
                 .collect();
+            // Im Stundenplan als Prüfung markierte Stunden, die noch fehlen.
+            let lessons = match self.range(today, to.min(today + Days::new(60))).await {
+                Ok(lessons) => lessons,
+                Err(e) => match (exams.is_empty(), first_error) {
+                    (true, Some(first)) => return Err(first),
+                    (true, None) => return Err(e),
+                    _ => Vec::new(),
+                },
+            };
+            for l in lessons.into_iter().filter(|l| l.status == "exam") {
+                let subject = l.subject.as_ref().map(|s| s.long_name.clone());
+                if exams
+                    .iter()
+                    .any(|e| e.date == l.date && e.subject == subject)
+                {
+                    continue;
+                }
+                exams.push(Exam {
+                    id: -l.id,
+                    kind: None,
+                    name: l.text.clone().unwrap_or_default(),
+                    subject,
+                    date: l.date.clone(),
+                    start: Some(l.start.clone()),
+                    end: Some(l.end.clone()),
+                    teachers: l.teachers.iter().map(|t| t.name.clone()).collect(),
+                    rooms: l.rooms.iter().map(|r| r.name.clone()).collect(),
+                    text: l.info.clone().or(l.substitution.clone()),
+                    grade: None,
+                });
+            }
             exams.sort_by(|a, b| (&a.date, &a.start).cmp(&(&b.date, &b.start)));
             Ok(exams)
         };

@@ -80,6 +80,11 @@ pub async fn untis_messages(state: State<'_, AppState>) -> Result<Vec<Message>> 
 }
 
 #[tauri::command]
+pub async fn untis_sent_messages(state: State<'_, AppState>) -> Result<Vec<Message>> {
+    Ok(untis(&state).sent_messages().await?)
+}
+
+#[tauri::command]
 pub async fn untis_message(
     app: AppHandle,
     state: State<'_, AppState>,

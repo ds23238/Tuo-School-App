@@ -17,6 +17,8 @@ pub struct Message {
     pub sent: String,
     pub read: bool,
     pub attachments: bool,
+    /// Bei gesendeten Mitteilungen: an wen.
+    pub recipients: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,7 +78,30 @@ fn message(v: &Value) -> Option<Message> {
         sent: str_of(&v["sentDateTime"]),
         read: v["isMessageRead"].as_bool().unwrap_or(true),
         attachments: v["hasAttachments"].as_bool().unwrap_or(false),
+        recipients: recipients(v),
     })
+}
+
+/// Empfänger gesendeter Mitteilungen; je nach Version anders benannt.
+fn recipients(v: &Value) -> String {
+    let names: Vec<String> = ["recipients", "recipientPersons", "recipientGroups"]
+        .iter()
+        .filter_map(|k| v[*k].as_array())
+        .flatten()
+        .filter_map(|r| {
+            r["displayName"]
+                .as_str()
+                .or(r["name"].as_str())
+                .map(str::to_owned)
+        })
+        .collect();
+    if !names.is_empty() {
+        return names.join(", ");
+    }
+    v["recipientCount"]
+        .as_i64()
+        .map(|n| n.to_string())
+        .unwrap_or_default()
 }
 
 const SEEN: &str = "messages.seen";
@@ -88,6 +113,20 @@ impl Session<'_> {
             .await?;
         Ok(inbox["incomingMessages"]
             .as_array()
+            .map(|list| list.iter().filter_map(message).collect())
+            .unwrap_or_default())
+    }
+
+    /// Gesendete Mitteilungen.
+    pub async fn sent_messages(&self) -> Result<Vec<Message>> {
+        let sent: Value = self
+            .rest(true, "WebUntis/api/rest/view/v1/messages/sent", &[])
+            .await?;
+        let list = ["sentMessages", "messages"]
+            .iter()
+            .find_map(|k| sent[*k].as_array())
+            .or(sent.as_array());
+        Ok(list
             .map(|list| list.iter().filter_map(message).collect())
             .unwrap_or_default())
     }

@@ -27,4 +27,6 @@ sys-locale = "0.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"
-ashpd = { version = "0.12", default-features = false, features = ["tokio"] }
+# Nicht "tokio": Das schaltet zbus auf Tokio um, dann beendet notify-rust
+# (blockierendes zbus) die App beim Anzeigen von Benachrichtigungen.
+ashpd = { version = "0.12", default-features = false, features = ["async-std"] }

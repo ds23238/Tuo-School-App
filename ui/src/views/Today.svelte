@@ -15,7 +15,8 @@
   import { formatShort, formatTime } from "../lib/format";
   import { i18n } from "../lib/i18n/index.svelte";
   import { nav } from "../lib/nav.svelte";
-  import { isoDate, mapping, openCourse, parseIso, subjectHue } from "../lib/untis.svelte";
+  import LessonDetail from "../components/untis/LessonDetail.svelte";
+  import { isoDate, lessonState, mapping, parseIso, subjectHue } from "../lib/untis.svelte";
 
   let moodle = $state<Account | null>(null);
   let untis = $state<Account | null>(null);
@@ -147,14 +148,14 @@
     await api.untis.setHomeworkDone(h.id, h.done).catch(fail);
   }
 
-  function lessonClick(l: Lesson) {
-    const id = mapping.courseFor(l);
-    if (id) openCourse(id);
-    else nav.go("timetable");
-  }
+  let selected = $state<Lesson | null>(null);
 
   const title = new Intl.DateTimeFormat(i18n.locale, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 </script>
+
+{#if selected}
+  <LessonDetail lesson={selected} {homework} onclose={() => (selected = null)} />
+{/if}
 
 <div class="page">
   <header>
@@ -178,7 +179,7 @@
           <ul class="lessons">
             {#each day.lessons as l (l.id)}
               <li>
-                <button class="lesson {l.status}" style="--hue:{subjectHue(l.subject?.name ?? '')}" onclick={() => lessonClick(l)}>
+                <button class="lesson {l.status}" style="--hue:{subjectHue(l.subject?.name ?? '')}" onclick={() => (selected = l)}>
                   <span class="time">{l.start}<br /><span class="muted">{l.end}</span></span>
                   <span class="what">
                     <strong>{l.subject?.longName ?? l.text ?? "–"}</strong>
@@ -188,9 +189,10 @@
                     </span>
                     {#if l.substitution || l.info}<span class="small note">{l.substitution ?? l.info}</span>{/if}
                   </span>
-                  {#if l.status === "cancelled"}<span class="pill danger">{i18n.t.untis.cancelled}</span>
-                  {:else if l.status === "changed"}<span class="pill accent">{i18n.t.untis.changed}</span>
-                  {:else if l.status === "exam"}<span class="pill">{i18n.t.untis.exam}</span>{/if}
+                  {#if lessonState(l) !== "regular"}
+                    {@const s = lessonState(l)}
+                    <span class="pill" class:danger={s === "cancelled" || s === "noTeacher"} class:accent={s !== "cancelled" && s !== "noTeacher" && s !== "exam"}>{i18n.t.untis.state[s]}</span>
+                  {/if}
                 </button>
               </li>
             {/each}

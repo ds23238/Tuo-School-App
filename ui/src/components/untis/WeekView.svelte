@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Lesson, type Week } from "../../lib/api";
+  import { api, type Homework, type Lesson, type Week } from "../../lib/api";
   import { errorText } from "../../lib/errors";
   import { fill, formatDate } from "../../lib/format";
   import { i18n } from "../../lib/i18n/index.svelte";
@@ -15,6 +15,11 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let selected = $state<Lesson | null>(null);
+  let homework = $state<Homework[]>([]);
+  api.untis.homework().then(
+    (h) => (homework = h.items),
+    () => {},
+  );
   const today = isoDate(new Date());
 
   async function load() {
@@ -135,7 +140,7 @@
 {/if}
 
 {#if selected}
-  <LessonDetail lesson={selected} onclose={() => (selected = null)} />
+  <LessonDetail lesson={selected} {homework} onclose={() => (selected = null)} />
 {/if}
 
 <style>

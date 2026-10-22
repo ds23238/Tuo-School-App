@@ -267,6 +267,8 @@ export interface UntisMessage {
   sent: string;
   read: boolean;
   attachments: boolean;
+  /** Bei gesendeten: an wen. */
+  recipients: string;
 }
 
 export interface UntisMessageDetail {
@@ -540,6 +542,7 @@ export const api = {
       invoke<void>("untis_set_homework_done", { id, done }),
     exams: () => invoke<Listed<Exam>>("untis_exams"),
     messages: () => invoke<UntisMessage[]>("untis_messages"),
+    sentMessages: () => invoke<UntisMessage[]>("untis_sent_messages"),
     message: (id: number) => invoke<UntisMessageDetail>("untis_message", { id }),
     dayNews: () => invoke<{ subject: string; html: string }[]>("untis_day_news"),
     openWeb: () => invoke<void>("untis_open_web"),

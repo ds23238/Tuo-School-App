@@ -1,4 +1,4 @@
-import { api, type Lesson, type MappingEntry } from "./api";
+import { api, type Homework, type Lesson, type MappingEntry } from "./api";
 import { nav } from "./nav.svelte";
 
 /** Farbton je Fach, damit dasselbe Fach überall gleich aussieht. */
@@ -47,4 +47,40 @@ export const mapping = new Mapping();
 export async function openCourse(courseId: number) {
   const course = (await api.moodle.courses()).find((c) => c.id === courseId);
   if (course) nav.openCourse(course);
+}
+
+export type LessonState =
+  | "cancelled"
+  | "noTeacher"
+  | "substitution"
+  | "roomChange"
+  | "changed"
+  | "exam"
+  | "other"
+  | "regular";
+
+/** Genauere Art einer Stunde als `status`, z. B. Vertretung ohne Lehrkraft. */
+export function lessonState(l: Lesson): LessonState {
+  if (l.status === "cancelled") return "cancelled";
+  const missing = (name: string) => !name || /^-+$/.test(name) || name === "?";
+  if (l.teachers.some((t) => missing(t.name)) || (l.status === "changed" && l.teachers.length === 0)) {
+    return "noTeacher";
+  }
+  if (l.teachers.some((t) => t.previous)) return "substitution";
+  if (l.rooms.some((r) => r.previous)) return "roomChange";
+  if (l.status === "changed") return "changed";
+  if (l.status === "exam" || l.status === "other") return l.status;
+  return "regular";
+}
+
+/** Hausaufgabe gehört zur Stunde: gleiches Fach, fällig oder aufgegeben an dem Tag. */
+export function homeworkFor(l: Lesson, homework: Homework[]): { due: Homework[]; assigned: Homework[] } {
+  const names = [l.subject?.name, l.subject?.longName]
+    .filter((n): n is string => !!n)
+    .map((n) => n.toLowerCase());
+  const same = (h: Homework) => !!h.subject && names.includes(h.subject.toLowerCase());
+  return {
+    due: homework.filter((h) => same(h) && h.due === l.date),
+    assigned: homework.filter((h) => same(h) && h.assigned === l.date && h.due !== l.date),
+  };
 }

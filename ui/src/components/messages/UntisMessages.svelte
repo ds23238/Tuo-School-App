@@ -2,23 +2,33 @@
   import { untrack } from "svelte";
   import { api, type UntisMessage, type UntisMessageDetail } from "../../lib/api";
   import { errorText } from "../../lib/errors";
-  import { formatDate, formatShort } from "../../lib/format";
+  import { fill, formatDate, formatShort } from "../../lib/format";
   import { i18n } from "../../lib/i18n/index.svelte";
   import { inbox } from "../../lib/inbox.svelte";
   import Avatar from "../Avatar.svelte";
   import Icon from "../Icon.svelte";
 
+  let box = $state<"received" | "sent">("received");
   let list = $state<UntisMessage[] | null>(null);
   let news = $state<{ subject: string; html: string }[]>([]);
   let detail = $state<UntisMessageDetail | null>(null);
   let error = $state<string | null>(null);
 
   async function load() {
+    error = null;
     try {
-      list = await api.untis.messages();
+      list = box === "sent" ? await api.untis.sentMessages() : await api.untis.messages();
     } catch (e) {
+      list = [];
       error = errorText(e);
     }
+  }
+
+  function choose(next: "received" | "sent") {
+    box = next;
+    detail = null;
+    list = null;
+    load();
   }
 
   async function open(m: UntisMessage) {
@@ -48,19 +58,32 @@
 
 <div class="split" class:detail={!!detail}>
   <aside>
-    {#each news as n, i (i)}
+    <div class="boxes">
+      <button class="chip" class:on={box === "received"} onclick={() => choose("received")}>
+        <Icon name="inbox" size={14} />{i18n.t.untis.received}
+      </button>
+      <button class="chip" class:on={box === "sent"} onclick={() => choose("sent")}>
+        <Icon name="send" size={14} />{i18n.t.untis.sent}
+      </button>
+    </div>
+    {#each box === "received" ? news : [] as n, i (i)}
       <div class="news">
         <div class="label"><Icon name="bell" size={14} /> {i18n.t.untis.dayNews}</div>
         {#if n.subject}<strong>{n.subject}</strong>{/if}
         <div class="html">{@html n.html}</div>
       </div>
     {/each}
-    {#if list?.length === 0}<p class="muted small pad">{i18n.t.untis.noMessages}</p>{/if}
+    {#if list?.length === 0 && !error}
+      <p class="muted small pad">{box === "sent" ? i18n.t.untis.noSent : i18n.t.untis.noMessages}</p>
+    {/if}
     {#each list ?? [] as m (m.id)}
       <button class="row" class:active={detail?.id === m.id} class:unread={!m.read} onclick={() => open(m)}>
-        <Avatar name={m.sender} size={34} />
+        <Avatar name={box === "sent" ? m.recipients || "?" : m.sender} size={34} />
         <span class="text">
-          <span class="line"><span class="who">{m.sender}</span><span class="time">{time(m.sent)}</span></span>
+          <span class="line">
+            <span class="who">{box === "sent" ? fill(i18n.t.untis.to, { names: m.recipients || "–" }) : m.sender}</span>
+            <span class="time">{time(m.sent)}</span>
+          </span>
           <span class="subject">{m.subject}</span>
           <span class="preview">{m.preview}</span>
         </span>
@@ -111,6 +134,30 @@
   aside {
     border-right: 1px solid var(--border);
     overflow-y: auto;
+  }
+  .boxes {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .chip.on {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
   }
   .news {
     padding: 12px;
