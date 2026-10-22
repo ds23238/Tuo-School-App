@@ -63,9 +63,11 @@ export type LessonState =
 export function lessonState(l: Lesson): LessonState {
   if (l.status === "cancelled") return "cancelled";
   const missing = (name: string) => !name || /^-+$/.test(name) || name === "?";
-  if (l.teachers.some((t) => missing(t.name)) || (l.status === "changed" && l.teachers.length === 0)) {
+  const present = l.teachers.filter((t) => !t.absent && !missing(t.name));
+  if ((l.teachers.length > 0 && present.length === 0) || (l.status === "changed" && l.teachers.length === 0)) {
     return "noTeacher";
   }
+  if (l.teachers.some((t) => t.absent)) return "substitution";
   if (l.teachers.some((t) => t.previous)) return "substitution";
   if (l.rooms.some((r) => r.previous)) return "roomChange";
   if (l.status === "changed") return "changed";

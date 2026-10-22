@@ -185,7 +185,7 @@
                     <strong>{l.subject?.longName ?? l.text ?? "–"}</strong>
                     <span class="muted small">
                       {l.rooms.map((r) => r.name).join(", ")}
-                      {#if l.teachers.length} · {l.teachers.map((t) => t.name).join(", ")}{/if}
+                      {#if l.teachers.length} · {l.teachers.map((t) => (t.absent ? `(${t.name})` : t.name)).join(", ")}{/if}
                     </span>
                     {#if l.substitution || l.info}<span class="small note">{l.substitution ?? l.info}</span>{/if}
                   </span>

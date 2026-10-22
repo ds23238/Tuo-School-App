@@ -24,7 +24,9 @@
   <span class="subject">{lesson.subject?.name ?? lesson.text ?? "–"}</span>
   <span class="meta">
     <span class:mark={changedRoom}>{lesson.rooms.map((r) => r.name).join(", ")}</span>
-    <span class:mark={changedTeacher}>{lesson.teachers.map((t) => t.name).join(", ")}</span>
+    <span class:mark={changedTeacher}>
+      {#each lesson.teachers as t, i (i)}{#if i > 0},{" "}{/if}<span class:struck={t.absent}>{t.name}</span>{/each}
+    </span>
   </span>
 </button>
 
@@ -80,6 +82,10 @@
   .changed {
     border-left-color: var(--accent);
     background: var(--accent-soft);
+  }
+  .struck {
+    text-decoration: line-through;
+    color: var(--danger);
   }
   .noTeacher {
     border-left-color: var(--danger);

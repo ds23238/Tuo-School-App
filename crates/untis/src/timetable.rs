@@ -15,6 +15,9 @@ pub struct Element {
     pub long_name: String,
     /// Ursprünglich geplant (z. B. vertretene Lehrkraft, alter Raum).
     pub previous: Option<String>,
+    /// Abwesend (in WebUntis durchgestrichen).
+    #[serde(default)]
+    pub absent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -72,7 +75,7 @@ pub struct Change {
     /// Stundenbezeichnung aus dem Zeitraster, sonst die Uhrzeit.
     pub period: String,
     pub subject: String,
-    /// `cancelled` oder `changed`.
+    /// `cancelled`, `noTeacher` (Lehrkraft fehlt, keine Vertretung) oder `changed`.
     pub kind: String,
     pub detail: Option<String>,
 }
@@ -149,6 +152,103 @@ fn element(s: &Short) -> Element {
             s.longname.clone()
         },
         previous: s.orgname.clone().filter(|o| !o.is_empty() && *o != s.name),
+        absent: false,
+    }
+}
+
+/// Stunde aus der Schnittstelle der Weboberfläche: Sie kennt den Zustand
+/// jeder Lehrkraft und jedes Raums (regulär, vertreten, abwesend).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebPeriod {
+    id: i64,
+    date: i64,
+    start_time: i64,
+    #[serde(default)]
+    elements: Vec<WebRef>,
+    #[serde(default)]
+    cell_state: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebRef {
+    #[serde(rename = "type")]
+    kind: i64,
+    id: i64,
+    #[serde(default)]
+    org_id: i64,
+    #[serde(default)]
+    state: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WebName {
+    #[serde(rename = "type")]
+    kind: i64,
+    id: i64,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    long_name: String,
+}
+
+const TEACHER: i64 = 2;
+const ROOM: i64 = 4;
+
+fn web_elements(period: &WebPeriod, names: &[WebName], kind: i64) -> Vec<Element> {
+    let named = |id: i64| names.iter().find(|n| n.kind == kind && n.id == id);
+    let mut list: Vec<Element> = period
+        .elements
+        .iter()
+        .filter(|e| e.kind == kind)
+        .map(|e| {
+            let found = named(e.id);
+            let name = found.map(|n| n.name.clone()).unwrap_or_default();
+            Element {
+                long_name: found
+                    .map(|n| n.long_name.clone())
+                    .filter(|l| !l.is_empty())
+                    .unwrap_or_else(|| name.clone()),
+                previous: (e.org_id > 0 && e.org_id != e.id)
+                    .then(|| named(e.org_id).map(|n| n.name.clone()))
+                    .flatten(),
+                absent: e.state == "ABSENT",
+                name,
+            }
+        })
+        .collect();
+    // Eine abwesende Lehrkraft, die schon als „statt …“ genannt ist, nicht doppelt.
+    let replaced: Vec<String> = list.iter().filter_map(|e| e.previous.clone()).collect();
+    list.retain(|e| !(e.absent && replaced.contains(&e.name)));
+    list
+}
+
+/// Ergänzt eine Stunde um die Zustände aus der Weboberfläche.
+fn apply_web(lesson: &mut Lesson, period: &WebPeriod, names: &[WebName]) {
+    let teachers = web_elements(period, names, TEACHER);
+    if !teachers.is_empty() {
+        lesson.teachers = teachers;
+    }
+    let rooms = web_elements(period, names, ROOM);
+    if !rooms.is_empty() {
+        lesson.rooms = rooms;
+    }
+    if lesson.status == "regular" {
+        let changed = lesson
+            .teachers
+            .iter()
+            .chain(&lesson.rooms)
+            .any(|e| e.absent || e.previous.is_some());
+        lesson.status = match period.cell_state.as_str() {
+            "CANCEL" | "FREE" => "cancelled",
+            "EXAM" => "exam",
+            "SUBSTITUTION" | "ROOMSUBSTITUTION" | "ADDITIONAL" | "SHIFT" => "changed",
+            _ if changed => "changed",
+            _ => "regular",
+        }
+        .to_owned();
     }
 }
 
@@ -217,9 +317,51 @@ impl Session<'_> {
             )
             .await?;
         let mut lessons: Vec<Lesson> = remote.iter().map(lesson).collect();
+        let mut monday = monday_of(from);
+        while monday <= to {
+            // Fehlt die Weboberfläche (Rechte, ältere Version), bleibt es beim JSON-RPC-Stand.
+            if let Ok((periods, names)) = self.web_week(monday).await {
+                for (l, r) in lessons.iter_mut().zip(&remote) {
+                    let found = periods.iter().find(|p| p.id == l.id).or_else(|| {
+                        let mut same = periods
+                            .iter()
+                            .filter(|p| p.date == r.date && p.start_time == r.start_time);
+                        match (same.next(), same.next()) {
+                            (Some(p), None) => Some(p),
+                            _ => None,
+                        }
+                    });
+                    if let Some(period) = found {
+                        apply_web(l, period, &names);
+                    }
+                }
+            }
+            monday = monday + Days::new(7);
+        }
         lessons.sort_by(|a, b| (&a.date, &a.start).cmp(&(&b.date, &b.start)));
         self.remember_subjects(&lessons)?;
         Ok(lessons)
+    }
+
+    async fn web_week(&self, monday: NaiveDate) -> Result<(Vec<WebPeriod>, Vec<WebName>)> {
+        let person = self.person()?;
+        let v: serde_json::Value = self
+            .rest(
+                false,
+                "WebUntis/api/public/timetable/weekly/data",
+                &[
+                    ("elementType", person.kind.to_string()),
+                    ("elementId", person.id.to_string()),
+                    ("date", monday.to_string()),
+                    ("formatId", "1".into()),
+                ],
+            )
+            .await?;
+        let data = &v["data"]["result"]["data"];
+        let periods =
+            serde_json::from_value(data["elementPeriods"][person.id.to_string()].clone())?;
+        let names = serde_json::from_value(data["elements"].clone())?;
+        Ok((periods, names))
     }
 
     fn remember_subjects(&self, lessons: &[Lesson]) -> Result<()> {
@@ -359,7 +501,13 @@ impl Session<'_> {
         let signature = |l: &Lesson| {
             let names = |e: &[Element]| {
                 e.iter()
-                    .map(|e| e.name.as_str())
+                    .map(|e| {
+                        if e.absent {
+                            format!("!{}", e.name)
+                        } else {
+                            e.name.clone()
+                        }
+                    })
                     .collect::<BTreeSet<_>>()
                     .into_iter()
                     .collect::<Vec<_>>()
@@ -395,7 +543,11 @@ impl Session<'_> {
                     .subject
                     .as_ref()
                     .map_or_else(String::new, |s| s.long_name.clone()),
-                kind: l.status.clone(),
+                kind: if !l.teachers.is_empty() && l.teachers.iter().all(|t| t.absent) {
+                    "noTeacher".to_owned()
+                } else {
+                    l.status.clone()
+                },
                 detail: l.substitution.clone().or_else(|| {
                     l.teachers
                         .iter()
@@ -439,6 +591,47 @@ mod tests {
         let l = remote(substituted);
         assert_eq!(l.status, "changed");
         assert_eq!(l.teachers[0].previous.as_deref(), Some("MUE"));
+    }
+
+    #[test]
+    fn web_states_mark_absent_teachers() {
+        let mut l = remote(
+            json!({"id": 7, "date": 20261021, "startTime": 800, "endTime": 845,
+            "su": [{"id": 3, "name": "M", "longname": "Mathematik"}],
+            "te": [{"id": 4, "name": "MUE"}], "ro": [{"id": 5, "name": "R101"}]}),
+        );
+        let names: Vec<WebName> = serde_json::from_value(json!([
+            {"type": 2, "id": 4, "name": "MUE", "longName": "Müller"},
+            {"type": 2, "id": 6, "name": "SCH", "longName": "Schulz"},
+            {"type": 4, "id": 5, "name": "R101"}, {"type": 4, "id": 8, "name": "R204"},
+        ]))
+        .unwrap();
+        // Lehrkraft abwesend, keine Vertretung.
+        let period: WebPeriod = serde_json::from_value(json!({"id": 7, "date": 20261021, "startTime": 800,
+            "cellState": "STANDARD",
+            "elements": [{"type": 2, "id": 4, "orgId": 0, "state": "ABSENT"}, {"type": 4, "id": 5, "state": "REGULAR"}]}))
+        .unwrap();
+        apply_web(&mut l, &period, &names);
+        assert!(l.teachers[0].absent);
+        assert_eq!(l.teachers[0].long_name, "Müller");
+        assert_eq!(l.status, "changed");
+
+        // Vertretung: die abwesende Lehrkraft erscheint nur als „statt“.
+        let period: WebPeriod = serde_json::from_value(json!({"id": 7, "date": 20261021, "startTime": 800,
+            "cellState": "SUBSTITUTION",
+            "elements": [{"type": 2, "id": 4, "state": "ABSENT"}, {"type": 2, "id": 6, "orgId": 4, "state": "SUBSTITUTED"},
+                         {"type": 4, "id": 8, "orgId": 5, "state": "SUBSTITUTED"}]}))
+        .unwrap();
+        apply_web(&mut l, &period, &names);
+        assert_eq!(l.teachers.len(), 1);
+        assert_eq!(
+            (
+                l.teachers[0].name.as_str(),
+                l.teachers[0].previous.as_deref()
+            ),
+            ("SCH", Some("MUE"))
+        );
+        assert_eq!(l.rooms[0].previous.as_deref(), Some("R101"));
     }
 
     #[test]

@@ -68,7 +68,16 @@
         <dd>{label(lesson.subject)}</dd>
       {/if}
       <dt>{i18n.t.untis.teacher}</dt>
-      <dd>{lesson.teachers.length ? names(lesson.teachers) : "–"}</dd>
+      <dd>
+        {#each lesson.teachers as t, i (i)}
+          {#if i > 0}<br />{/if}
+          {#if t.absent}
+            <span class="struck">{label(t)}</span> <span class="muted">({i18n.t.untis.absent})</span>
+          {:else}
+            {names([t])}
+          {/if}
+        {:else}–{/each}
+      </dd>
       {#if lesson.rooms.length}<dt>{i18n.t.untis.room}</dt><dd>{names(lesson.rooms)}</dd>{/if}
       {#if lesson.classes.length}<dt>{i18n.t.untis.classes}</dt><dd>{lesson.classes.map((c) => c.name).join(", ")}</dd>{/if}
       {#if lesson.substitution}<dt>{i18n.t.untis.substitution}</dt><dd>{lesson.substitution}</dd>{/if}
@@ -154,6 +163,10 @@
   }
   dd {
     margin: 0;
+  }
+  .struck {
+    text-decoration: line-through;
+    color: var(--danger);
   }
   .homework {
     width: 100%;

@@ -315,6 +315,7 @@ export const de = {
       regular: "Unterricht",
     },
     subject: "Fach",
+    absent: "abwesend",
     lessonText: "Stundentext",
     dueToday: "Fällig in dieser Stunde",
     noLessonHomework: "Keine Hausaufgaben für diese Stunde.",

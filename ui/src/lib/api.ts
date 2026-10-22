@@ -197,6 +197,8 @@ export interface UntisElement {
   longName: string;
   /** Ursprünglich geplant, z. B. vertretene Lehrkraft. */
   previous: string | null;
+  /** Abwesend (in WebUntis durchgestrichen). */
+  absent: boolean;
 }
 
 export type LessonStatus = "regular" | "cancelled" | "changed" | "exam" | "other";

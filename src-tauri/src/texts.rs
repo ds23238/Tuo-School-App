@@ -70,6 +70,8 @@ const DE: Texts = Texts {
         const DAYS: [&str; 7] = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
         let what = if c.kind == "cancelled" {
             "entfällt".to_owned()
+        } else if c.kind == "noTeacher" {
+            "ohne Lehrkraft".to_owned()
         } else {
             c.detail.clone().unwrap_or_else(|| "geändert".into())
         };
@@ -116,6 +118,8 @@ const EN: Texts = Texts {
         const DAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         let what = if c.kind == "cancelled" {
             "cancelled".to_owned()
+        } else if c.kind == "noTeacher" {
+            "without teacher".to_owned()
         } else {
             c.detail.clone().unwrap_or_else(|| "changed".into())
         };

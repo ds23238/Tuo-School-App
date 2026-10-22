@@ -317,6 +317,7 @@ export const en: Messages = {
       regular: "Lesson",
     },
     subject: "Subject",
+    absent: "absent",
     lessonText: "Lesson text",
     dueToday: "Due in this lesson",
     noLessonHomework: "No homework for this lesson.",
