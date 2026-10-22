@@ -4,7 +4,7 @@ use chrono::{Days, Local, NaiveDate};
 use tauri::{AppHandle, State};
 use tsa_moodle::deadlines::Deadline;
 use tsa_moodle::sync::RecentFile;
-use tsa_untis::homework::{Exam, Homework, Listed};
+use tsa_untis::homework::{Exam, Homework, Listed, NewExam};
 use tsa_untis::messages::{DayNews, Message, MessageDetail};
 use tsa_untis::timetable::{Lesson, Week};
 use tsa_untis::{LoginResult, School, Session};
@@ -72,6 +72,16 @@ pub fn untis_set_homework_done(state: State<'_, AppState>, id: i64, done: bool) 
 #[tauri::command]
 pub async fn untis_exams(state: State<'_, AppState>) -> Result<Listed<Exam>> {
     Ok(untis(&state).exams(today()).await?)
+}
+
+#[tauri::command]
+pub fn untis_add_exam(state: State<'_, AppState>, exam: NewExam) -> Result<()> {
+    Ok(untis(&state).add_exam(exam)?)
+}
+
+#[tauri::command]
+pub fn untis_delete_exam(state: State<'_, AppState>, id: i64) -> Result<()> {
+    Ok(untis(&state).delete_exam(id)?)
 }
 
 #[tauri::command]

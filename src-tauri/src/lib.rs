@@ -165,6 +165,8 @@ pub fn run() {
             untis::untis_homework,
             untis::untis_set_homework_done,
             untis::untis_exams,
+            untis::untis_add_exam,
+            untis::untis_delete_exam,
             untis::untis_messages,
             untis::untis_sent_messages,
             untis::untis_message,

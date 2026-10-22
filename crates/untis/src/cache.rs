@@ -35,7 +35,8 @@ pub fn load<T: DeserializeOwned>(db: &Database, key: &str) -> Result<Option<(T, 
 
 pub fn clear(db: &Database) -> Result<()> {
     db.conn().execute_batch(
-        "DELETE FROM untis_cache; DELETE FROM untis_subjects; DELETE FROM untis_homework_done;",
+        "DELETE FROM untis_cache; DELETE FROM untis_subjects; DELETE FROM untis_homework_done;
+         DELETE FROM untis_local_exams;",
     )?;
     Ok(())
 }

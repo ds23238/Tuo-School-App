@@ -1,11 +1,36 @@
 import { api, type Homework, type Lesson, type MappingEntry } from "./api";
+import { appearance } from "./appearance.svelte";
 import { nav } from "./nav.svelte";
 
 /** Farbton je Fach, damit dasselbe Fach überall gleich aussieht. */
-export function subjectHue(name: string): number {
+function subjectHue(name: string): number {
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
   return hash % 360;
+}
+
+/** Standardfarbe eines Fachs als `#rrggbb` (für Farbwähler). */
+export function defaultSubjectColor(short: string): string {
+  const h = subjectHue(short) / 360;
+  const [s, l] = [0.6, 0.5];
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12;
+    const c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return Math.round(c * 255)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+/**
+ * Farbe eines Fachs; `key` ist Kürzel oder ausgeschriebener Name (Hausaufgaben
+ * und Prüfungen kennen nur den Namen). Eigene Farben aus den Einstellungen gehen vor.
+ */
+export function subjectColor(key: string): string {
+  const entry = mapping.entries.find((e) => e.subject === key || e.longName === key);
+  const short = entry?.subject ?? key;
+  return appearance.subjectColors[short] ?? defaultSubjectColor(short);
 }
 
 /** ISO-Datum in Ortszeit (nicht UTC wie `toISOString`). */

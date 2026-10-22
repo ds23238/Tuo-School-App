@@ -13,6 +13,10 @@ export interface Settings {
   notifications: boolean;
   /** Nur Linux: `auto`, `always`, `never`, `compat`. Wirkt nach Neustart. */
   graphics: string;
+  /** `system`, `light` oder `dark`. */
+  theme: string;
+  /** Eigene Farben je Untis-Fach (Kürzel → `#rrggbb`). */
+  subjectColors: Record<string, string>;
 }
 
 export interface SyncStatus {
@@ -259,6 +263,8 @@ export interface Exam {
   rooms: string[];
   text: string | null;
   grade: string | null;
+  /** Selbst eingetragen. */
+  local: boolean;
 }
 
 export interface UntisMessage {
@@ -543,6 +549,9 @@ export const api = {
     setHomeworkDone: (id: number, done: boolean) =>
       invoke<void>("untis_set_homework_done", { id, done }),
     exams: () => invoke<Listed<Exam>>("untis_exams"),
+    addExam: (exam: { date: string; start: string | null; subject: string | null; name: string; note: string | null }) =>
+      invoke<void>("untis_add_exam", { exam }),
+    deleteExam: (id: number) => invoke<void>("untis_delete_exam", { id }),
     messages: () => invoke<UntisMessage[]>("untis_messages"),
     sentMessages: () => invoke<UntisMessage[]>("untis_sent_messages"),
     message: (id: number) => invoke<UntisMessageDetail>("untis_message", { id }),

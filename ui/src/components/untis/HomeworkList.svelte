@@ -3,7 +3,7 @@
   import { errorText } from "../../lib/errors";
   import { fill, formatDate } from "../../lib/format";
   import { i18n } from "../../lib/i18n/index.svelte";
-  import { isoDate, parseIso, subjectHue } from "../../lib/untis.svelte";
+  import { isoDate, parseIso, subjectColor } from "../../lib/untis.svelte";
 
   let data = $state<Listed<Homework> | null>(null);
   let error = $state<string | null>(null);
@@ -43,7 +43,7 @@
 {#if data && shown.length === 0}<p class="muted">{i18n.t.untis.noHomework}</p>{/if}
 <ul>
   {#each shown as h (h.id)}
-    <li class="card" class:done={h.done} style="--hue:{subjectHue(h.subject ?? '')}">
+    <li class="card" class:done={h.done} style="--c:{subjectColor(h.subject ?? '')}">
       <input type="checkbox" checked={h.done} onchange={() => toggle(h)} aria-label={i18n.t.untis.done} />
       <div class="body">
         <div class="head">
@@ -87,7 +87,7 @@
     gap: 14px;
     align-items: flex-start;
     padding: 14px 16px;
-    border-left: 4px solid hsl(var(--hue) 60% 50%);
+    border-left: 4px solid var(--c);
   }
   li input {
     margin-top: 4px;

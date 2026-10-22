@@ -15,7 +15,8 @@ pub use session::{LoginResult, Session, UntisState};
 
 use tsa_core::Database;
 
-const MIGRATIONS: &[&str] = &["CREATE TABLE untis_cache (
+const MIGRATIONS: &[&str] = &[
+    "CREATE TABLE untis_cache (
         key        TEXT PRIMARY KEY,
         json       TEXT NOT NULL,
         fetched_at INTEGER NOT NULL
@@ -26,7 +27,16 @@ const MIGRATIONS: &[&str] = &["CREATE TABLE untis_cache (
     );
     CREATE TABLE untis_homework_done (
         id INTEGER PRIMARY KEY
-    );"];
+    );",
+    "CREATE TABLE untis_local_exams (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        date    TEXT NOT NULL,
+        start   TEXT,
+        subject TEXT,
+        name    TEXT NOT NULL,
+        note    TEXT
+    );",
+];
 
 /// Legt die Tabellen des Moduls an bzw. aktualisiert sie.
 pub fn init(db: &Database) -> tsa_core::Result<()> {

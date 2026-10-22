@@ -37,6 +37,22 @@ pub struct Exam {
     pub rooms: Vec<String>,
     pub text: Option<String>,
     pub grade: Option<String>,
+    /// Selbst in der App eingetragen, nicht aus WebUntis.
+    #[serde(default)]
+    pub local: bool,
+}
+
+/// Eine selbst eingetragene Prüfung.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewExam {
+    /// ISO-Datum.
+    pub date: String,
+    /// `HH:MM`.
+    pub start: Option<String>,
+    pub subject: Option<String>,
+    pub name: String,
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -307,6 +323,7 @@ impl Session<'_> {
                     rooms: e.rooms,
                     text: some(e.text),
                     grade: e.grade.filter(|g| !g.is_empty()),
+                    local: false,
                 })
                 .collect();
             // Im Stundenplan als Prüfung markierte Stunden, die noch fehlen.
@@ -338,12 +355,74 @@ impl Session<'_> {
                     rooms: l.rooms.iter().map(|r| r.name.clone()).collect(),
                     text: l.info.clone().or(l.substitution.clone()),
                     grade: None,
+                    local: false,
                 });
             }
             exams.sort_by(|a, b| (&a.date, &a.start).cmp(&(&b.date, &b.start)));
             Ok(exams)
         };
-        self.cached("exams", fetch).await
+        let mut listed = self.cached("exams", fetch).await.or_else(|e| {
+            // Ohne Verbindung und Zwischenstand zumindest die eigenen zeigen.
+            match self.local_exams() {
+                Ok(local) if !local.is_empty() => Ok(Listed {
+                    items: Vec::new(),
+                    fetched_at: 0,
+                    offline: true,
+                }),
+                _ => Err(e),
+            }
+        })?;
+        listed.items.extend(self.local_exams()?);
+        listed
+            .items
+            .sort_by(|a, b| (&a.date, &a.start).cmp(&(&b.date, &b.start)));
+        Ok(listed)
+    }
+
+    fn local_exams(&self) -> Result<Vec<Exam>> {
+        let conn = self.db().conn();
+        let mut stmt =
+            conn.prepare("SELECT id, date, start, subject, name, note FROM untis_local_exams")?;
+        let rows = stmt.query_map([], |r| {
+            Ok(Exam {
+                id: r.get(0)?,
+                kind: None,
+                date: r.get(1)?,
+                start: r.get(2)?,
+                end: None,
+                subject: r.get(3)?,
+                name: r.get(4)?,
+                teachers: Vec::new(),
+                rooms: Vec::new(),
+                text: r.get(5)?,
+                grade: None,
+                local: true,
+            })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn add_exam(&self, exam: NewExam) -> Result<()> {
+        let clean = |v: Option<String>| v.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty());
+        self.db().conn().execute(
+            "INSERT INTO untis_local_exams (date, start, subject, name, note)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            (
+                exam.date,
+                clean(exam.start),
+                clean(exam.subject),
+                exam.name.trim(),
+                clean(exam.note),
+            ),
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_exam(&self, id: i64) -> Result<()> {
+        self.db()
+            .conn()
+            .execute("DELETE FROM untis_local_exams WHERE id = ?1", [id])?;
+        Ok(())
     }
 }
 

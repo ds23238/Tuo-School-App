@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::OptionalExtension;
@@ -22,6 +23,10 @@ pub struct Settings {
     /// `never` oder `compat` (ohne DMA-BUF, hilft bei NVIDIA). Wirkt nach
     /// einem Neustart.
     pub graphics: String,
+    /// Farbschema: `system`, `light` oder `dark`.
+    pub theme: String,
+    /// Eigene Farben je Untis-Fach (Kürzel → `#rrggbb`).
+    pub subject_colors: BTreeMap<String, String>,
 }
 
 impl Settings {
@@ -33,6 +38,8 @@ impl Settings {
             sync_interval_minutes: 30,
             notifications: true,
             graphics: "auto".into(),
+            theme: "system".into(),
+            subject_colors: BTreeMap::new(),
         }
     }
 
@@ -111,6 +118,8 @@ mod tests {
             sync_interval_minutes: 60,
             notifications: false,
             graphics: "never".into(),
+            theme: "dark".into(),
+            subject_colors: [("M".to_owned(), "#ff0000".to_owned())].into(),
         };
         s.save(&db).unwrap();
         assert_eq!(Settings::load(&db, Path::new("/sync")).unwrap(), s);

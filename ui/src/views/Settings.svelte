@@ -5,7 +5,8 @@
   import Icon from "../components/Icon.svelte";
   import { api, type Account, type Course, type Settings } from "../lib/api";
   import { nav } from "../lib/nav.svelte";
-  import { mapping } from "../lib/untis.svelte";
+  import { appearance } from "../lib/appearance.svelte";
+  import { defaultSubjectColor, mapping } from "../lib/untis.svelte";
   import { errorText } from "../lib/errors";
   import { fill, formatDate } from "../lib/format";
   import { i18n, locales } from "../lib/i18n/index.svelte";
@@ -54,7 +55,9 @@
     [settings, accounts] = await Promise.all([api.getSettings(), api.listAccounts()]);
     if (accounts.some((a) => a.service === "untis")) {
       mapping.load();
-      courses = (await api.moodle.courses()).filter((c) => c.enrolled);
+      if (accounts.some((a) => a.service === "moodle")) {
+        courses = (await api.moodle.courses()).filter((c) => c.enrolled);
+      }
     }
     keyringOk = await api.checkKeyring().then(
       () => true,
@@ -69,6 +72,7 @@
       await api.saveSettings(next);
       settings = next;
       i18n.use(next.locale);
+      appearance.apply(next);
     });
   }
 
@@ -106,6 +110,14 @@
           {#each locales as l (l)}
             <option value={l}>{i18n.t.locale[l]}</option>
           {/each}
+        </select>
+      </div>
+      <div class="row">
+        <label for="theme">{i18n.t.settings.theme}</label>
+        <select id="theme" value={settings.theme} onchange={(e) => update({ theme: e.currentTarget.value })}>
+          <option value="system">{i18n.t.settings.themeSystem}</option>
+          <option value="light">{i18n.t.settings.themeLight}</option>
+          <option value="dark">{i18n.t.settings.themeDark}</option>
         </select>
       </div>
       {#if graphicsConfigurable}
@@ -218,17 +230,38 @@
       {/each}
     </section>
 
-    {#if accounts.some((a) => a.service === "untis") && accounts.some((a) => a.service === "moodle")}
+    {#if accounts.some((a) => a.service === "untis")}
+      {@const withMoodle = accounts.some((a) => a.service === "moodle")}
       <section class="card">
         <h2>{i18n.t.mapping.title}</h2>
-        <p class="muted small hint">{i18n.t.mapping.hint}</p>
+        <p class="muted small hint">{withMoodle ? i18n.t.mapping.hint : i18n.t.mapping.colorHint}</p>
         {#each mapping.entries as entry (entry.subject)}
+          {@const custom = settings.subjectColors[entry.subject]}
           <div class="row">
-            <div>
-              <div class="strong">{entry.longName}</div>
-              <div class="muted small">{entry.subject}</div>
+            <div class="subject">
+              <input
+                type="color"
+                class="swatch"
+                value={custom ?? defaultSubjectColor(entry.subject)}
+                onchange={(e) =>
+                  update({ subjectColors: { ...settings!.subjectColors, [entry.subject]: e.currentTarget.value } })}
+                aria-label={`${i18n.t.mapping.color}: ${entry.longName}`}
+                title={i18n.t.mapping.color}
+              />
+              <div>
+                <div class="strong">{entry.longName}</div>
+                <div class="muted small">
+                  {entry.subject}
+                  {#if custom}
+                    · <button class="link" onclick={() => {
+                      const { [entry.subject]: _, ...rest } = settings!.subjectColors;
+                      update({ subjectColors: rest });
+                    }}>{i18n.t.mapping.resetColor}</button>
+                  {/if}
+                </div>
+              </div>
             </div>
-            <div class="value">
+            {#if withMoodle}<div class="value">
               {#if entry.suggested && entry.courseId}
                 <span class="pill accent">{i18n.t.mapping.suggested}</span>
                 <button class="btn small" onclick={() => mapping.set(entry.subject, entry.courseId)}>
@@ -248,7 +281,7 @@
                   <option value={c.id}>{c.fullName}</option>
                 {/each}
               </select>
-            </div>
+            </div>{/if}
           </div>
         {:else}
           <p class="muted">{i18n.t.mapping.empty}</p>
@@ -317,6 +350,28 @@
   }
   p {
     margin: 0;
+  }
+  .subject {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .swatch {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+  }
+  .link {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--accent-strong);
+    cursor: pointer;
+    font-size: inherit;
   }
   .hint {
     margin: 0 0 8px;

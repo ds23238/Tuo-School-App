@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Lesson } from "../../lib/api";
-  import { lessonState, subjectHue } from "../../lib/untis.svelte";
+  import { lessonState, subjectColor } from "../../lib/untis.svelte";
 
   /** Eine Stunde im Raster: Fach, Raum, Lehrkraft; Änderungen farbig. */
   let {
@@ -9,7 +9,7 @@
     onselect,
   }: { lesson: Lesson; selected?: boolean; onselect: () => void } = $props();
 
-  const hue = $derived(subjectHue(lesson.subject?.name ?? lesson.text ?? "?"));
+  const color = $derived(subjectColor(lesson.subject?.name ?? lesson.text ?? "?"));
   const changedRoom = $derived(lesson.rooms.some((r) => r.previous));
   const changedTeacher = $derived(lesson.teachers.some((t) => t.previous));
 </script>
@@ -17,7 +17,7 @@
 <button
   class="lesson {lesson.status} {lessonState(lesson)}"
   class:selected
-  style="--hue:{hue}"
+  style="--c:{color}"
   onclick={onselect}
   title={[lesson.subject?.longName, lesson.substitution, lesson.info].filter(Boolean).join("\n")}
 >
@@ -39,9 +39,9 @@
     gap: 2px;
     padding: 6px 8px;
     border: 1px solid transparent;
-    border-left: 4px solid hsl(var(--hue) 60% 50%);
+    border-left: 4px solid var(--c);
     border-radius: 8px;
-    background: hsl(var(--hue) 70% 50% / 0.1);
+    background: color-mix(in srgb, var(--c) 13%, transparent);
     color: var(--text);
     text-align: left;
     cursor: pointer;
@@ -50,7 +50,7 @@
   }
   .lesson:hover,
   .lesson.selected {
-    border-color: hsl(var(--hue) 60% 50%);
+    border-color: var(--c);
   }
   .subject {
     font-weight: 700;

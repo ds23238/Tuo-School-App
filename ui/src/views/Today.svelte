@@ -16,7 +16,7 @@
   import { i18n } from "../lib/i18n/index.svelte";
   import { nav } from "../lib/nav.svelte";
   import LessonDetail from "../components/untis/LessonDetail.svelte";
-  import { isoDate, lessonState, mapping, parseIso, subjectHue } from "../lib/untis.svelte";
+  import { isoDate, lessonState, mapping, parseIso, subjectColor } from "../lib/untis.svelte";
 
   let moodle = $state<Account | null>(null);
   let untis = $state<Account | null>(null);
@@ -179,7 +179,7 @@
           <ul class="lessons">
             {#each day.lessons as l (l.id)}
               <li>
-                <button class="lesson {l.status}" style="--hue:{subjectHue(l.subject?.name ?? '')}" onclick={() => (selected = l)}>
+                <button class="lesson {l.status}" style="--c:{subjectColor(l.subject?.name ?? '')}" onclick={() => (selected = l)}>
                   <span class="time">{l.start}<br /><span class="muted">{l.end}</span></span>
                   <span class="what">
                     <strong>{l.subject?.longName ?? l.text ?? "–"}</strong>
@@ -308,7 +308,7 @@
     width: 100%;
     padding: 8px 10px;
     border: 0;
-    border-left: 4px solid hsl(var(--hue) 60% 50%);
+    border-left: 4px solid var(--c);
     border-radius: 8px;
     background: var(--surface-2);
     color: inherit;

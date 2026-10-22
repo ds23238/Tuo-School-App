@@ -4,6 +4,7 @@
   import { i18n } from "./lib/i18n/index.svelte";
   import { nav, type View } from "./lib/nav.svelte";
   import { sync } from "./lib/sync.svelte";
+  import "./lib/appearance.svelte";
   import { inbox } from "./lib/inbox.svelte";
   import Courses from "./views/Courses.svelte";
   import Messages from "./views/Messages.svelte";

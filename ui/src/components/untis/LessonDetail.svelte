@@ -33,6 +33,12 @@
       .join(", ");
   }
 
+  /** Erst wechseln, dann schließen: Nach dem Schließen ist `lesson` weg. */
+  async function goToCourse(id: number) {
+    await openCourse(id);
+    onclose();
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (e.key === "Escape") onclose();
   }
@@ -102,7 +108,7 @@
     </div>
 
     {#if courseId}
-      <button class="btn small" onclick={() => (onclose(), openCourse(courseId))}>
+      <button class="btn small" onclick={() => goToCourse(courseId)}>
         <Icon name="courses" size={16} />
         {i18n.t.untis.openCourse}
       </button>
