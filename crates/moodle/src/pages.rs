@@ -1,4 +1,5 @@
-//! Textseiten und Bücher: Inhalt als bereinigtes HTML, offline verfügbar.
+//! Textseiten, Bücher und Wikis: Inhalt als bereinigtes HTML, offline
+//! verfügbar.
 
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -169,6 +170,33 @@ impl Session<'_> {
                         chapters.push(self.chapter(&item.title, item.level, &url).await?);
                     }
                 }
+            }
+            // Wikiseiten als Kapitel; Startseite zuerst. Bearbeiten in Moodle.
+            "wiki" => {
+                let id = module.instance.ok_or(Error::FileNotFound)?;
+                let v: serde_json::Value = self
+                    .call(
+                        "mod_wiki_get_subwiki_pages",
+                        &[
+                            ("wikiid", id.to_string()),
+                            ("options[includecontent]", "1".into()),
+                        ],
+                    )
+                    .await?;
+                let mut pages = v["pages"].as_array().cloned().unwrap_or_default();
+                pages.sort_by_key(|p| {
+                    (
+                        !p["firstpage"].as_bool().unwrap_or(false),
+                        p["title"].as_str().unwrap_or_default().to_lowercase(),
+                    )
+                });
+                let base = self.base()?.to_string();
+                chapters.extend(pages.iter().map(|p| RawChapter {
+                    title: p["title"].as_str().unwrap_or_default().to_owned(),
+                    level: 0,
+                    html: p["cachedcontent"].as_str().unwrap_or_default().to_owned(),
+                    base: base.clone(),
+                }));
             }
             _ => return Err(Error::FileNotFound),
         }
