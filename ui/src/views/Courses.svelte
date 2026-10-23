@@ -8,7 +8,12 @@
   import { nav } from "../lib/nav.svelte";
   import { sync } from "../lib/sync.svelte";
   import AssignmentView from "./AssignmentView.svelte";
+  import BoardView from "./BoardView.svelte";
+  import ChoiceView from "./ChoiceView.svelte";
   import CourseView from "./CourseView.svelte";
+  import GlossaryView from "./GlossaryView.svelte";
+  import DataView from "./DataView.svelte";
+  import ForumView from "./ForumView.svelte";
   import PageView from "./PageView.svelte";
 
   type Filter = "current" | "past" | "all";
@@ -144,6 +149,16 @@
       {onlogin}
     />
   </div>
+{:else if nav.course && nav.module?.kind === "choice"}
+  {#key nav.module.id}<ChoiceView course={nav.course} module={nav.module} />{/key}
+{:else if nav.course && nav.module?.kind === "glossary"}
+  {#key nav.module.id}<GlossaryView course={nav.course} module={nav.module} />{/key}
+{:else if nav.course && nav.module?.kind === "board"}
+  {#key nav.module.id}<BoardView course={nav.course} module={nav.module} />{/key}
+{:else if nav.course && nav.module?.kind === "data"}
+  {#key nav.module.id}<DataView course={nav.course} module={nav.module} />{/key}
+{:else if nav.course && nav.module?.kind === "forum"}
+  {#key nav.module.id}<ForumView course={nav.course} module={nav.module} />{/key}
 {:else if nav.course && nav.module?.kind === "assign"}
   {#key nav.module.id}<AssignmentView course={nav.course} module={nav.module} />{/key}
 {:else if nav.course && nav.module}

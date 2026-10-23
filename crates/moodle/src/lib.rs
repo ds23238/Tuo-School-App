@@ -1,10 +1,17 @@
 //! Moodle über die REST-API der Mobile-App (`moodle_mobile_app`).
 
+pub mod activities;
 pub mod assign;
+pub mod board;
+pub mod choice;
 pub mod client;
 pub mod contents;
 pub mod courses;
+pub mod data;
+pub mod deadlines;
 pub mod error;
+pub mod forum;
+pub mod glossary;
 pub mod html;
 pub mod mail;
 pub mod messages;
@@ -66,6 +73,12 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE moodle_courses ADD COLUMN image_url TEXT;",
     "CREATE TABLE moodle_pages (
         module_id  INTEGER PRIMARY KEY,
+        json       TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL
+    );",
+    "ALTER TABLE moodle_files ADD COLUMN downloaded_at INTEGER;",
+    "CREATE TABLE moodle_activity_cache (
+        key        TEXT PRIMARY KEY,
         json       TEXT NOT NULL,
         fetched_at INTEGER NOT NULL
     );",

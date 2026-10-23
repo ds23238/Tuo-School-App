@@ -1,4 +1,5 @@
-//! Textseiten und Bücher: Inhalt als bereinigtes HTML, offline verfügbar.
+//! Textseiten, Bücher und Wikis: Inhalt als bereinigtes HTML, offline
+//! verfügbar.
 
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -129,11 +130,29 @@ impl Session<'_> {
                 })
                 .and_then(|c| c.fileurl.clone())
         };
+        // Bei Textseiten fehlt in der Adresse von index.html die Revision
+        // (`…/content/index.html`), die Bilder liegen unter `…/content/6/`.
+        // Relative Bilder werden daher gegen eine Nachbardatei aufgelöst.
+        let sibling = |path: &str| {
+            module
+                .contents
+                .iter()
+                .find(|c| {
+                    c.kind == "file"
+                        && c.filename != "index.html"
+                        && c.filepath.as_deref() == Some(path)
+                })
+                .and_then(|c| c.fileurl.clone())
+        };
         let mut chapters = Vec::new();
         match module.modname.as_str() {
             "page" => {
                 let url = file("/").ok_or(Error::FileNotFound)?;
-                chapters.push(self.chapter(&module.name, 0, &url).await?);
+                let mut chapter = self.chapter(&module.name, 0, &url).await?;
+                if let Some(base) = sibling("/") {
+                    chapter.base = base;
+                }
+                chapters.push(chapter);
             }
             "book" => {
                 let structure = module
@@ -151,6 +170,33 @@ impl Session<'_> {
                         chapters.push(self.chapter(&item.title, item.level, &url).await?);
                     }
                 }
+            }
+            // Wikiseiten als Kapitel; Startseite zuerst. Bearbeiten in Moodle.
+            "wiki" => {
+                let id = module.instance.ok_or(Error::FileNotFound)?;
+                let v: serde_json::Value = self
+                    .call(
+                        "mod_wiki_get_subwiki_pages",
+                        &[
+                            ("wikiid", id.to_string()),
+                            ("options[includecontent]", "1".into()),
+                        ],
+                    )
+                    .await?;
+                let mut pages = v["pages"].as_array().cloned().unwrap_or_default();
+                pages.sort_by_key(|p| {
+                    (
+                        !p["firstpage"].as_bool().unwrap_or(false),
+                        p["title"].as_str().unwrap_or_default().to_lowercase(),
+                    )
+                });
+                let base = self.base()?.to_string();
+                chapters.extend(pages.iter().map(|p| RawChapter {
+                    title: p["title"].as_str().unwrap_or_default().to_owned(),
+                    level: 0,
+                    html: p["cachedcontent"].as_str().unwrap_or_default().to_owned(),
+                    base: base.clone(),
+                }));
             }
             _ => return Err(Error::FileNotFound),
         }

@@ -8,5 +8,5 @@ export function errorText(e: unknown): string {
   const text = errors[e.code];
   if (!text) return `${i18n.t.error.generic}: ${e.message}`;
   // Diese Meldungen sind schon für Menschen geschrieben und nennen den Grund.
-  return ["moodle", "open", "io", "sync", "autostart"].includes(e.code) ? `${text}: ${e.message}` : text;
+  return ["moodle", "open", "io", "sync", "autostart", "untis", "untisResponse"].includes(e.code) ? `${text}: ${e.message}` : text;
 }

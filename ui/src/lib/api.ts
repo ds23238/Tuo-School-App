@@ -13,6 +13,10 @@ export interface Settings {
   notifications: boolean;
   /** Nur Linux: `auto`, `always`, `never`, `compat`. Wirkt nach Neustart. */
   graphics: string;
+  /** `system`, `light` oder `dark`. */
+  theme: string;
+  /** Eigene Farben je Untis-Fach (Kürzel → `#rrggbb`). */
+  subjectColors: Record<string, string>;
 }
 
 export interface SyncStatus {
@@ -142,6 +146,111 @@ export interface PageContent {
   offline: boolean;
 }
 
+/** Daten einer Aktivität mit Stand (offline: gespeicherter Stand). */
+export interface Cached<T> {
+  data: T;
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface FileRef {
+  name: string;
+  url: string;
+  size: number;
+}
+
+export interface Forum {
+  id: number;
+  discussions: Discussion[];
+  canPost: boolean;
+}
+
+export interface Discussion {
+  id: number;
+  name: string;
+  author: string;
+  created: number;
+  modified: number;
+  replies: number;
+  unread: number;
+  pinned: boolean;
+  locked: boolean;
+  preview: string;
+}
+
+export interface ForumPost {
+  id: number;
+  parent: number | null;
+  subject: string;
+  author: string;
+  created: number;
+  html: string;
+  attachments: FileRef[];
+  unread: boolean;
+  canReply: boolean;
+}
+
+export interface Thread {
+  id: number;
+  name: string;
+  posts: ForumPost[];
+}
+
+export interface DataField {
+  id: number;
+  name: string;
+  kind: string;
+}
+
+export interface DataEntry {
+  id: number;
+  author: string;
+  created: number;
+  modified: number;
+  approved: boolean;
+  values: { fieldId: number; html: string; date: number | null }[];
+}
+
+export interface MoodleDatabase {
+  id: number;
+  fields: DataField[];
+  entries: DataEntry[];
+  canAdd: boolean;
+  addUrl: string;
+}
+
+export interface Choice {
+  id: number;
+  options: { id: number; text: string; checked: boolean; disabled: boolean; votes: number | null; percent: number | null }[];
+  multiple: boolean;
+  canUpdate: boolean;
+  answered: boolean;
+  open: boolean;
+  opens: number | null;
+  closes: number | null;
+  results: boolean;
+}
+
+export interface GlossaryEntry {
+  id: number;
+  concept: string;
+  html: string;
+  author: string;
+  created: number;
+  approved: boolean;
+  attachments: FileRef[];
+}
+
+export interface Glossary {
+  id: number;
+  entries: GlossaryEntry[];
+  canAdd: boolean;
+}
+
+export interface Board {
+  columns: { id: number; name: string; notes: { id: number; heading: string; html: string; created: number; rating: number }[] }[];
+}
+
 export interface AssignFile {
   name: string;
   size: number;
@@ -181,6 +290,150 @@ export interface Counts {
   notifications: number;
   /** `null` ohne Moodle-Mail. */
   mail: number | null;
+  /** Ungelesene Untis-Mitteilungen, `null` ohne WebUntis-Konto. */
+  untis: number | null;
+}
+
+export interface School {
+  server: string;
+  loginName: string;
+  displayName: string;
+  address: string;
+}
+
+export interface UntisElement {
+  name: string;
+  longName: string;
+  /** Ursprünglich geplant, z. B. vertretene Lehrkraft. */
+  previous: string | null;
+  /** Abwesend (in WebUntis durchgestrichen). */
+  absent: boolean;
+}
+
+export type LessonStatus = "regular" | "cancelled" | "changed" | "exam" | "other";
+
+export interface Lesson {
+  id: number;
+  /** ISO-Datum. */
+  date: string;
+  /** `HH:MM`. */
+  start: string;
+  end: string;
+  subject: UntisElement | null;
+  teachers: UntisElement[];
+  rooms: UntisElement[];
+  classes: UntisElement[];
+  status: LessonStatus;
+  text: string | null;
+  info: string | null;
+  substitution: string | null;
+}
+
+export interface Week {
+  monday: string;
+  days: { date: string; holiday: string | null }[];
+  lessons: Lesson[];
+  grid: { name: string; start: string; end: string }[];
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface Listed<T> {
+  items: T[];
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface Homework {
+  id: number;
+  subject: string | null;
+  teacher: string | null;
+  assigned: string;
+  due: string;
+  text: string;
+  remark: string | null;
+  done: boolean;
+  attachments: string[];
+}
+
+export interface Exam {
+  id: number;
+  kind: string | null;
+  name: string;
+  subject: string | null;
+  date: string;
+  start: string | null;
+  end: string | null;
+  teachers: string[];
+  rooms: string[];
+  text: string | null;
+  grade: string | null;
+  /** Selbst eingetragen. */
+  local: boolean;
+}
+
+export interface UntisMessage {
+  id: number;
+  subject: string;
+  preview: string;
+  sender: string;
+  sent: string;
+  read: boolean;
+  attachments: boolean;
+  /** Bei gesendeten: an wen. */
+  recipients: string;
+}
+
+export interface UntisMessageDetail {
+  id: number;
+  subject: string;
+  html: string;
+  sender: string;
+  senderId: number | null;
+  sent: string;
+  attachments: { id: string; name: string }[];
+}
+
+export interface UntisRecipient {
+  id: number;
+  name: string;
+  group: string;
+  tags: string[];
+}
+
+export interface UntisCompose {
+  allowed: boolean;
+  recipients: UntisRecipient[];
+  maxFileSize: number | null;
+  maxFileCount: number | null;
+}
+
+export interface Deadline {
+  id: number;
+  name: string;
+  kind: string;
+  courseId: number;
+  course: string;
+  moduleId: number | null;
+  /** Unix-Zeit. */
+  time: number;
+  url: string | null;
+}
+
+export interface RecentFile {
+  id: number;
+  courseId: number;
+  course: string;
+  name: string;
+  downloadedAt: number;
+}
+
+export interface MappingEntry {
+  subject: string;
+  longName: string;
+  courseId: number | null;
+  /** Vorschlag, noch nicht bestätigt. */
+  suggested: boolean;
 }
 
 export interface Member {
@@ -350,6 +603,26 @@ export const api = {
   syncNow: () => invoke<CourseSync[]>("sync_now"),
 
   moodle: {
+    forum: (courseId: number, moduleId: number) =>
+      invoke<Cached<Forum>>("moodle_forum", { courseId, moduleId }),
+    forumThread: (discussionId: number) => invoke<Cached<Thread>>("moodle_forum_thread", { discussionId }),
+    forumReply: (postId: number, subject: string, text: string) =>
+      invoke<void>("moodle_forum_reply", { postId, subject, text }),
+    forumAdd: (courseId: number, moduleId: number, subject: string, text: string) =>
+      invoke<number>("moodle_forum_add", { courseId, moduleId, subject, text }),
+    database: (courseId: number, moduleId: number) =>
+      invoke<Cached<MoodleDatabase>>("moodle_database", { courseId, moduleId }),
+    choice: (courseId: number, moduleId: number) => invoke<Cached<Choice>>("moodle_choice", { courseId, moduleId }),
+    choiceAnswer: (choiceId: number, options: number[]) => invoke<void>("moodle_choice_answer", { choiceId, options }),
+    glossary: (courseId: number, moduleId: number) =>
+      invoke<Cached<Glossary>>("moodle_glossary", { courseId, moduleId }),
+    glossaryAdd: (glossaryId: number, concept: string, text: string) =>
+      invoke<void>("moodle_glossary_add", { glossaryId, concept, text }),
+    glossaryAttachment: (courseId: number, moduleId: number, entryId: number, name: string) =>
+      invoke<void>("moodle_glossary_attachment", { courseId, moduleId, entryId, name }),
+    board: (courseId: number, moduleId: number) => invoke<Cached<Board>>("moodle_board", { courseId, moduleId }),
+    forumAttachment: (discussionId: number, postId: number, name: string) =>
+      invoke<void>("moodle_forum_attachment", { discussionId, postId, name }),
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),
     login: (url: string, username: string, password: string, remember: boolean) =>
       invoke<Account>("moodle_login", { url, username, password, remember }),
@@ -399,6 +672,45 @@ export const api = {
     notifications: () => invoke<MoodleNotification[]>("moodle_notifications"),
     markNotificationRead: (id: number) => invoke<void>("moodle_mark_notification_read", { id }),
     markAllNotificationsRead: () => invoke<void>("moodle_mark_all_notifications_read"),
+  },
+
+  untis: {
+    search: (query: string) => invoke<School[]>("untis_search", { query }),
+    login: (school: School, username: string, password: string, remember: boolean) =>
+      invoke<{ account: Account; persistent: boolean }>("untis_login", {
+        school,
+        username,
+        password,
+        remember,
+      }),
+    week: (date: string) => invoke<Week>("untis_week", { date }),
+    upcoming: () => invoke<Lesson[]>("untis_upcoming"),
+    homework: () => invoke<Listed<Homework>>("untis_homework"),
+    setHomeworkDone: (id: number, done: boolean) =>
+      invoke<void>("untis_set_homework_done", { id, done }),
+    exams: () => invoke<Listed<Exam>>("untis_exams"),
+    addExam: (exam: { date: string; start: string | null; subject: string | null; name: string; note: string | null }) =>
+      invoke<void>("untis_add_exam", { exam }),
+    deleteExam: (id: number) => invoke<void>("untis_delete_exam", { id }),
+    messages: () => invoke<UntisMessage[]>("untis_messages"),
+    sentMessages: () => invoke<UntisMessage[]>("untis_sent_messages"),
+    message: (id: number) => invoke<UntisMessageDetail>("untis_message", { id }),
+    dayNews: () => invoke<{ subject: string; html: string }[]>("untis_day_news"),
+    openWeb: () => invoke<void>("untis_open_web"),
+    compose: () => invoke<UntisCompose>("untis_compose"),
+    send: (message: { subject: string; content: string; recipients: number[] }, files: string[]) =>
+      invoke<void>("untis_send_message", { message, files }),
+  },
+
+  today: {
+    deadlines: () => invoke<Deadline[]>("moodle_deadlines"),
+    recentFiles: () => invoke<RecentFile[]>("moodle_recent_files"),
+  },
+
+  mapping: {
+    list: () => invoke<MappingEntry[]>("mapping_list"),
+    set: (subject: string, courseId: number | null) =>
+      invoke<void>("mapping_set", { subject, courseId }),
   },
 
   mail: {

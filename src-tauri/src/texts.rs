@@ -1,6 +1,7 @@
 //! Texte, die das Backend selbst anzeigt (Tray, Benachrichtigungen).
 
 use tsa_core::Settings;
+use tsa_untis::timetable::Change;
 
 pub struct Texts {
     pub open: &'static str,
@@ -16,6 +17,25 @@ pub struct Texts {
     pub notification_title: &'static str,
     pub messages_title: &'static str,
     pub messages_body: fn(usize) -> String,
+    pub untis_title: fn(&str) -> String,
+    pub changes_title: &'static str,
+    pub change_line: fn(&Change) -> String,
+}
+
+/// `2026-10-21` → Wochentag 0 (Montag) bis 6.
+fn weekday(date: &str) -> usize {
+    use chrono::Datelike;
+    chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_or(0, |d| d.weekday().num_days_from_monday() as usize)
+}
+
+/// `2026-10-21` → `21.10.`
+fn day_month(date: &str) -> String {
+    let parts: Vec<&str> = date.split('-').collect();
+    match parts.as_slice() {
+        [_, m, d] => format!("{d}.{m}."),
+        _ => date.to_owned(),
+    }
 }
 
 const DE: Texts = Texts {
@@ -44,6 +64,26 @@ const DE: Texts = Texts {
     notification_title: "Moodle-Benachrichtigung",
     messages_title: "Neue Mitteilungen",
     messages_body: |n| format!("{n} neue Nachrichten, Mails und Benachrichtigungen"),
+    untis_title: |name| format!("Untis-Mitteilung von {name}"),
+    changes_title: "Stundenplan geändert",
+    change_line: |c| {
+        const DAYS: [&str; 7] = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+        let what = if c.kind == "cancelled" {
+            "entfällt".to_owned()
+        } else if c.kind == "noTeacher" {
+            "ohne Lehrkraft".to_owned()
+        } else {
+            c.detail.clone().unwrap_or_else(|| "geändert".into())
+        };
+        format!(
+            "{} {}, {}. Std.: {} {}",
+            DAYS[weekday(&c.date)],
+            day_month(&c.date),
+            c.period,
+            c.subject,
+            what
+        )
+    },
 };
 
 const EN: Texts = Texts {
@@ -72,6 +112,26 @@ const EN: Texts = Texts {
     notification_title: "Moodle notification",
     messages_title: "New messages",
     messages_body: |n| format!("{n} new messages, mails and notifications"),
+    untis_title: |name| format!("Untis message from {name}"),
+    changes_title: "Timetable changed",
+    change_line: |c| {
+        const DAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        let what = if c.kind == "cancelled" {
+            "cancelled".to_owned()
+        } else if c.kind == "noTeacher" {
+            "without teacher".to_owned()
+        } else {
+            c.detail.clone().unwrap_or_else(|| "changed".into())
+        };
+        format!(
+            "{} {}, period {}: {} {}",
+            DAYS[weekday(&c.date)],
+            day_month(&c.date),
+            c.period,
+            c.subject,
+            what
+        )
+    },
 };
 
 /// Sprache aus den Einstellungen, sonst die des Systems.

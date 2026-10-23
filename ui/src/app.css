@@ -43,8 +43,50 @@
   line-height: 1.45;
 }
 
+/* Dunkles Farbschema: per Einstellung (data-theme) oder wie das System. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #131315;
+  --surface: #1b1b1e;
+  --surface-2: #202024;
+  --surface-3: #26262b;
+  --border: #2e2e34;
+  --border-strong: #3a3a41;
+  --hover: #2a2a2f;
+  --text: #ececee;
+  --text-2: #c9c9ce;
+  --muted: #9c9ca4;
+  --accent: #f28a35;
+  --accent-strong: #f39a4f;
+  --accent-ink: #f7b57a;
+  --accent-soft: #3a2414;
+  --on-accent: #1a1206;
+  --success: #86c98a;
+  --success-soft: #1d3020;
+  --danger: #f2a39d;
+  --danger-soft: #3e1e1c;
+  --warning-soft: #3a3120;
+
+  --p-content: #6ccbd6;
+  --p-content-soft: #15363a;
+  --p-assessment: #f283b1;
+  --p-assessment-soft: #3d1a28;
+  --p-communication: #b2a1f5;
+  --p-communication-soft: #2a2342;
+  --p-collaboration: #8fd093;
+  --p-collaboration-soft: #1d3020;
+  --p-interactive: #f7b57a;
+  --p-interactive-soft: #3a2414;
+  --p-other: #a8a8b0;
+  --p-other-soft: #2a2a2f;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #131315;
     --surface: #1b1b1e;

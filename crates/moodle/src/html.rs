@@ -94,8 +94,29 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
         .url_relative(UrlRelative::RewriteWithBase(base.clone()))
         .link_rel(Some("noopener noreferrer"))
         .add_generic_attributes(["style"])
-        .add_allowed_classes("img", ["icon", "iconlarge", "iconsmall"])
+        // Ausrichtung aus dem Atto-Editor; TinyMCE setzt sie als Style.
+        .add_allowed_classes(
+            "img",
+            [
+                "icon",
+                "iconlarge",
+                "iconsmall",
+                "atto_image_button_left",
+                "atto_image_button_right",
+                "atto_image_button_middle",
+                "atto_image_button_text-top",
+                "atto_image_button_text-bottom",
+                "float-left",
+                "float-right",
+                "float-start",
+                "float-end",
+            ],
+        )
         .add_allowed_classes("a", ["embed"])
+        .add_allowed_classes(
+            "span",
+            ["embed-tile", "embed-text", "embed-kind", "embed-name"],
+        )
         .add_tags(["video", "audio", "source", "track"])
         .add_tag_attributes(
             "video",
@@ -129,7 +150,8 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
 }
 
 /// Ersetzt eingebettete Seiten (Videos, H5P, Formulare …) durch einen Link
-/// darauf: Fremde Inhalte laufen nicht im App-Fenster, sind aber erreichbar.
+/// genau wie ein Link-Element im Kurs: Fremde Inhalte laufen nicht im
+/// App-Fenster, sind aber erreichbar. Art und Symbol setzt die Oberfläche.
 fn iframes_to_links(html: &str) -> std::borrow::Cow<'_, str> {
     use std::sync::LazyLock;
     static IFRAME: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -173,7 +195,7 @@ fn iframes_to_links(html: &str) -> std::borrow::Cow<'_, str> {
                 .unwrap_or_else(|| href.clone())
         });
         format!(
-            r#"<p><a class="embed" href="{}">{}</a></p>"#,
+            r#"<p><a class="embed" href="{}"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">{}</span></span></a></p>"#,
             html_escape::encode_double_quoted_attribute(&href),
             html_escape::encode_text(&label)
         )
@@ -274,8 +296,8 @@ mod tests {
         assert_eq!(
             out,
             concat!(
-                r#"<p><a class="embed" href="https://www.youtube.com/watch?v=abc123" rel="noopener noreferrer">Mein &amp; Video</a></p>"#,
-                r#"<p><a class="embed" href="https://h5p.example/x" rel="noopener noreferrer">h5p.example</a></p>"#
+                r#"<p><a class="embed" href="https://www.youtube.com/watch?v=abc123" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">Mein &amp; Video</span></span></a></p>"#,
+                r#"<p><a class="embed" href="https://h5p.example/x" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">h5p.example</span></span></a></p>"#
             )
         );
         assert_eq!(clean(r#"<iframe src="javascript:alert(1)"></iframe>"#), "");

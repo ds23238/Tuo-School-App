@@ -142,6 +142,43 @@ pub fn collect(course_name: &str, sections: &[RemoteSection]) -> Vec<RemoteFile>
 
 /// Übernimmt den Stand der Kursinhalte: neue Dateien eintragen, geänderte
 /// aktualisieren, verschwundene als entfernt markieren.
+/// Kürzlich heruntergeladene Datei (für die Heute-Ansicht).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentFile {
+    pub id: i64,
+    pub course_id: i64,
+    pub course: String,
+    pub name: String,
+    pub downloaded_at: i64,
+}
+
+/// Dateien, die seit `since` (Unix-Zeit) geladen wurden, neueste zuerst.
+pub fn recent(db: &Database, since: i64) -> Result<Vec<RecentFile>> {
+    let conn = db.conn();
+    let mut stmt = conn.prepare(
+        "SELECT f.id, f.course_id, c.fullname, f.target_path, f.downloaded_at
+         FROM moodle_files f JOIN moodle_courses c ON c.id = f.course_id
+         WHERE f.downloaded_at >= ?1 AND f.removed = 0
+         ORDER BY f.downloaded_at DESC LIMIT 30",
+    )?;
+    let rows = stmt.query_map([since], |r| {
+        let target: String = r.get(3)?;
+        Ok(RecentFile {
+            id: r.get(0)?,
+            course_id: r.get(1)?,
+            course: r.get(2)?,
+            name: target
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or(&target)
+                .to_owned(),
+            downloaded_at: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
 pub fn record(db: &Database, course_id: i64, files: &[RemoteFile]) -> Result<()> {
     let mut conn = db.conn();
     let tx = conn.transaction()?;
@@ -379,9 +416,16 @@ impl Files<'_> {
         self.db.conn().execute(
             "UPDATE moodle_files SET local_path = ?2, local_hash = ?3, local_mtime = ?4,
                  local_size = ?5, downloaded_modified = remote_modified,
-                 downloaded_size = remote_size
+                 downloaded_size = remote_size, downloaded_at = ?6
              WHERE id = ?1",
-            (r.id, &local, hash, mtime(&meta), meta.len() as i64),
+            (
+                r.id,
+                &local,
+                hash,
+                mtime(&meta),
+                meta.len() as i64,
+                crate::contents::now(),
+            ),
         )?;
         Ok(path)
     }

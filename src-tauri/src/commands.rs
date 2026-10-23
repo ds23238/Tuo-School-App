@@ -6,7 +6,7 @@ use tsa_core::{Account, SecretKind, Service, Settings};
 use tsa_moodle::assign::{Assignment, Draft};
 use tsa_moodle::contents::CourseView;
 use tsa_moodle::mail::{DraftInput, Folder, MailDraft, MailMessage, MailPage, MailStatus, Person};
-use tsa_moodle::messages::{Chat, ChatMessage, Conversation, Counts, Member, Notification};
+use tsa_moodle::messages::{Chat, ChatMessage, Conversation, Member, Notification};
 use tsa_moodle::pages::PageContent;
 use tsa_moodle::session::{CourseSync, SiteCheck};
 use tsa_moodle::sync::{CourseFiles, course_dir};
@@ -40,7 +40,13 @@ pub async fn remove_account(state: State<'_, AppState>, service: Service) -> Res
             state.mail.reset().await;
             Ok(moodle(&state).sign_out()?)
         }
-        Service::Untis => Ok(Account::remove(&state.db, state.secrets.as_ref(), service)?),
+        Service::Untis => {
+            Ok(
+                tsa_untis::Session::new(&state.db, state.secrets.as_ref(), &state.untis)
+                    .sign_out()
+                    .await?,
+            )
+        }
     }
 }
 
@@ -288,12 +294,12 @@ pub fn graphics_configurable() -> bool {
 }
 
 #[tauri::command]
-pub fn message_counts(state: State<'_, AppState>) -> Counts {
+pub fn message_counts(state: State<'_, AppState>) -> inbox::Totals {
     state.inbox.counts()
 }
 
 #[tauri::command]
-pub async fn refresh_message_counts(app: AppHandle) -> Counts {
+pub async fn refresh_message_counts(app: AppHandle) -> inbox::Totals {
     inbox::check(&app).await
 }
 

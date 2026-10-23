@@ -3,7 +3,10 @@
   import { invoke } from "@tauri-apps/api/core";
   import { ask, open } from "@tauri-apps/plugin-dialog";
   import Icon from "../components/Icon.svelte";
-  import { api, type Account, type Settings } from "../lib/api";
+  import { api, type Account, type Course, type Settings } from "../lib/api";
+  import { nav } from "../lib/nav.svelte";
+  import { appearance } from "../lib/appearance.svelte";
+  import { defaultSubjectColor, mapping } from "../lib/untis.svelte";
   import { errorText } from "../lib/errors";
   import { fill, formatDate } from "../lib/format";
   import { i18n, locales } from "../lib/i18n/index.svelte";
@@ -11,6 +14,7 @@
 
   let settings = $state<Settings | null>(null);
   let accounts = $state<Account[]>([]);
+  let courses = $state<Course[]>([]);
   let keyringOk = $state(true);
   let autostart = $state<boolean | null>(null);
   let graphicsConfigurable = $state(false);
@@ -49,6 +53,12 @@
 
   run(async () => {
     [settings, accounts] = await Promise.all([api.getSettings(), api.listAccounts()]);
+    if (accounts.some((a) => a.service === "untis")) {
+      mapping.load();
+      if (accounts.some((a) => a.service === "moodle")) {
+        courses = (await api.moodle.courses()).filter((c) => c.enrolled);
+      }
+    }
     keyringOk = await api.checkKeyring().then(
       () => true,
       () => false,
@@ -62,6 +72,7 @@
       await api.saveSettings(next);
       settings = next;
       i18n.use(next.locale);
+      appearance.apply(next);
     });
   }
 
@@ -99,6 +110,14 @@
           {#each locales as l (l)}
             <option value={l}>{i18n.t.locale[l]}</option>
           {/each}
+        </select>
+      </div>
+      <div class="row">
+        <label for="theme">{i18n.t.settings.theme}</label>
+        <select id="theme" value={settings.theme} onchange={(e) => update({ theme: e.currentTarget.value })}>
+          <option value="system">{i18n.t.settings.themeSystem}</option>
+          <option value="light">{i18n.t.settings.themeLight}</option>
+          <option value="dark">{i18n.t.settings.themeDark}</option>
         </select>
       </div>
       {#if graphicsConfigurable}
@@ -201,7 +220,74 @@
       {:else}
         <p class="muted">{i18n.t.settings.noAccounts}</p>
       {/each}
+      {#each (["moodle", "untis"] as const).filter((s) => !accounts.some((a) => a.service === s)) as service (service)}
+        <div class="row">
+          <div class="strong">{i18n.t.service[service]}</div>
+          <button class="btn small primary" onclick={() => nav.go(service === "moodle" ? "courses" : "timetable")}>
+            {i18n.t.today.connect}
+          </button>
+        </div>
+      {/each}
     </section>
+
+    {#if accounts.some((a) => a.service === "untis")}
+      {@const withMoodle = accounts.some((a) => a.service === "moodle")}
+      <section class="card">
+        <h2>{i18n.t.mapping.title}</h2>
+        <p class="muted small hint">{withMoodle ? i18n.t.mapping.hint : i18n.t.mapping.colorHint}</p>
+        {#each mapping.entries as entry (entry.subject)}
+          {@const custom = settings.subjectColors[entry.subject]}
+          <div class="row">
+            <div class="subject">
+              <input
+                type="color"
+                class="swatch"
+                value={custom ?? defaultSubjectColor(entry.subject)}
+                onchange={(e) =>
+                  update({ subjectColors: { ...settings!.subjectColors, [entry.subject]: e.currentTarget.value } })}
+                aria-label={`${i18n.t.mapping.color}: ${entry.longName}`}
+                title={i18n.t.mapping.color}
+              />
+              <div>
+                <div class="strong">{entry.longName}</div>
+                <div class="muted small">
+                  {entry.subject}
+                  {#if custom}
+                    · <button class="link" onclick={() => {
+                      const { [entry.subject]: _, ...rest } = settings!.subjectColors;
+                      update({ subjectColors: rest });
+                    }}>{i18n.t.mapping.resetColor}</button>
+                  {/if}
+                </div>
+              </div>
+            </div>
+            {#if withMoodle}<div class="value">
+              {#if entry.suggested && entry.courseId}
+                <span class="pill accent">{i18n.t.mapping.suggested}</span>
+                <button class="btn small" onclick={() => mapping.set(entry.subject, entry.courseId)}>
+                  {i18n.t.mapping.confirm}
+                </button>
+              {/if}
+              <select
+                value={entry.courseId ?? ""}
+                onchange={(e) => {
+                  const v = (e.currentTarget as HTMLSelectElement).value;
+                  mapping.set(entry.subject, v ? Number(v) : null);
+                }}
+                aria-label={entry.longName}
+              >
+                <option value="">{i18n.t.mapping.none}</option>
+                {#each courses as c (c.id)}
+                  <option value={c.id}>{c.fullName}</option>
+                {/each}
+              </select>
+            </div>{/if}
+          </div>
+        {:else}
+          <p class="muted">{i18n.t.mapping.empty}</p>
+        {/each}
+      </section>
+    {/if}
 
     <section class="card">
       <h2>{i18n.t.settings.about}</h2>
@@ -264,6 +350,34 @@
   }
   p {
     margin: 0;
+  }
+  .subject {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .swatch {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+  }
+  .link {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--accent-strong);
+    cursor: pointer;
+    font-size: inherit;
+  }
+  .hint {
+    margin: 0 0 8px;
+  }
+  .value select {
+    max-width: 280px;
   }
   section > p {
     padding: 12px 0;
