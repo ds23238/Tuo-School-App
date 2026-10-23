@@ -82,19 +82,7 @@
     }
   }
 
-  let opening = $state<string | null>(null);
-  async function openAttachment(id: string) {
-    if (!detail) return;
-    opening = id;
-    error = null;
-    try {
-      await api.untis.openAttachment(detail.id, id);
-    } catch (e) {
-      error = errorText(e);
-    } finally {
-      opening = null;
-    }
-  }
+  const openWeb = () => api.untis.openWeb().catch((e) => (error = errorText(e)));
 
   const time = (sent: string) => {
     const t = Date.parse(sent);
@@ -173,11 +161,12 @@
         {#if detail.attachments.length}
           <div class="files">
             {#each detail.attachments as a (a.id + a.name)}
-              <button class="file" onclick={() => openAttachment(a.id)} disabled={opening === a.id}>
+              <button class="file" onclick={openWeb} title={i18n.t.untis.attachmentInWeb}>
                 <Icon name="paperclip" size={14} />
                 {a.name}
               </button>
             {/each}
+            <span class="muted small">{i18n.t.untis.attachmentInWeb}</span>
           </div>
         {/if}
         <div class="actions">
@@ -187,7 +176,7 @@
               {i18n.t.untis.reply}
             </button>
           {/if}
-          <button class="btn small" onclick={() => api.untis.openWeb().catch((e) => (error = errorText(e)))}>
+          <button class="btn small" onclick={openWeb}>
             <Icon name="external" size={14} />
             {i18n.t.untis.openWeb}
           </button>
@@ -223,6 +212,7 @@
   .files {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
   .file {
@@ -239,10 +229,6 @@
   }
   .file:hover {
     background: var(--hover);
-  }
-  .file:disabled {
-    opacity: 0.6;
-    cursor: progress;
   }
   .actions {
     display: flex;

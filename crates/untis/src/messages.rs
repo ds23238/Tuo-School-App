@@ -40,8 +40,6 @@ pub struct MessageDetail {
 pub struct Attachment {
     pub id: String,
     pub name: String,
-    /// Direkter Link, falls WebUntis einen mitliefert.
-    pub url: Option<String>,
 }
 
 /// Mögliche Empfängerin oder möglicher Empfänger einer neuen Mitteilung.
@@ -192,70 +190,10 @@ fn attachments(v: &Value) -> Vec<Attachment> {
             } else {
                 name
             },
-            url: text_of(a, &["downloadUrl", "storageUrl", "url", "src", "link"]),
             id,
         });
     }
     out
-}
-
-/// Der gelieferte Eintrag eines Anhangs, für Fehlermeldungen; Links mit
-/// Signatur werden gekürzt.
-fn raw_attachment(v: &Value, id: &str) -> String {
-    let entry = v
-        .as_object()
-        .into_iter()
-        .flat_map(|o| o.values())
-        .filter_map(Value::as_array)
-        .flatten()
-        .find(|a| {
-            text_of(a, &["fileId", "attachmentId", "fileAttachmentId", "id"]).as_deref() == Some(id)
-        });
-    shorten(&entry.map(Value::to_string).unwrap_or_default())
-}
-
-/// Kurzfassung einer Fehlerantwort, ohne XML-Kopf.
-fn error_body(body: &[u8]) -> String {
-    let text = String::from_utf8_lossy(body);
-    let text = match text.find("?>") {
-        Some(i) if text.trim_start().starts_with("<?xml") => &text[i + 2..],
-        _ => &text,
-    };
-    let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() > 400 {
-        format!("{}…", text.chars().take(400).collect::<String>())
-    } else {
-        text
-    }
-}
-
-fn shorten(text: &str) -> String {
-    let text = text.split('?').next().unwrap_or_default();
-    if text.chars().count() > 400 {
-        format!("{}…", text.chars().take(400).collect::<String>())
-    } else {
-        text.to_owned()
-    }
-}
-
-/// Dateiname ohne Pfadteile und unter Windows verbotene Zeichen.
-fn safe_name(name: &str) -> String {
-    let cleaned: String = name
-        .chars()
-        .map(|c| {
-            if "<>:\"/\\|?*".contains(c) || c.is_control() {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let cleaned = cleaned.trim().trim_matches('.').to_owned();
-    if cleaned.is_empty() {
-        "Anhang".into()
-    } else {
-        cleaned
-    }
 }
 
 /// Empfängerlisten: je nach Version Gruppen mit Personen oder flach.
@@ -465,113 +403,6 @@ impl Session<'_> {
         Err(send_error(last.0, &last.1))
     }
 
-    /// Lädt einen Anhang nach `dir` und liefert den Pfad. Ohne mitgelieferten
-    /// Link werden mögliche Pfade der Weboberfläche probiert; schlägt alles
-    /// fehl, nennt der Fehler jeden Versuch und die gelieferten Daten.
-    pub async fn attachment(
-        &self,
-        message_id: i64,
-        attachment_id: &str,
-        dir: &std::path::Path,
-    ) -> Result<std::path::PathBuf> {
-        let v: Value = self
-            .rest(
-                true,
-                &format!("WebUntis/api/rest/view/v1/messages/{message_id}"),
-                &[],
-            )
-            .await?;
-        let found = attachments(&v)
-            .into_iter()
-            .find(|a| a.id == attachment_id)
-            .ok_or_else(|| Error::Response("Anhang nicht gefunden".into()))?;
-        let raw = raw_attachment(&v, attachment_id);
-
-        // Die Weboberfläche lädt direkt aus dem Dateispeicher:
-        // storage.webuntis.com/untis-sts-prod/<Mandant>/<Anhang>.
-        let mut candidates: Vec<String> = found.url.iter().cloned().collect();
-        match self.tenant().await? {
-            Some(tenant) => candidates.push(format!(
-                "{}/untis-sts-prod/{tenant}/{attachment_id}",
-                crate::client::storage_base()
-            )),
-            None => {
-                return Err(Error::Untis {
-                    code: 404,
-                    message: format!(
-                        "„{}“: Im Token fehlt die Schulnummer (tenant_id).\nDaten: {raw}",
-                        found.name
-                    ),
-                });
-            }
-        }
-        let mut tried = Vec::new();
-        let mut bytes = None;
-        'outer: for url in &candidates {
-            let (status, kind, body) = match self.get_bytes(url).await {
-                Ok(r) => r,
-                Err(Error::Network(e)) if e.status().is_none() && !e.is_connect() => {
-                    tried.push(format!("{url} → {e}"));
-                    continue;
-                }
-                Err(e) => return Err(e),
-            };
-            let kind_text = kind.clone().unwrap_or_else(|| "?".into());
-            tried.push(format!("{url} → {status} {kind_text}"));
-            if !(200..300).contains(&status) || kind_text.starts_with("text/html") {
-                // Speicher-Fehler (XML/JSON) nennen meist den Grund.
-                if !kind_text.starts_with("text/html") && !body.is_empty() {
-                    tried.push(format!("  Antwort: {}", error_body(&body)));
-                }
-                continue;
-            }
-            // Manche Pfade liefern nur einen Link zum Dateispeicher.
-            if kind_text.contains("json") || kind_text.starts_with("text/plain") {
-                let text = String::from_utf8_lossy(&body).trim().to_owned();
-                let v: Value = serde_json::from_str(&text).unwrap_or_default();
-                let link = text_of(&v, &["downloadUrl", "storageUrl", "url", "src"])
-                    .or(v.as_str().map(str::to_owned))
-                    .or(
-                        (text.starts_with("http") && !text.contains(char::is_whitespace))
-                            .then_some(text.clone()),
-                    );
-                let Some(link) = link else {
-                    tried.push(format!("  Antwort: {}", shorten(&text)));
-                    continue;
-                };
-                let (status, kind, body) = self.get_bytes(&link).await?;
-                tried.push(format!(
-                    "  → {} → {status} {}",
-                    shorten(&link),
-                    kind.unwrap_or_default()
-                ));
-                if (200..300).contains(&status) {
-                    bytes = Some(body);
-                    break 'outer;
-                }
-                continue;
-            }
-            bytes = Some(body);
-            break;
-        }
-        let Some(bytes) = bytes else {
-            return Err(Error::Untis {
-                code: 404,
-                message: format!(
-                    "„{}“ ließ sich nicht laden.\nDaten: {}\nVersucht:\n{}",
-                    found.name,
-                    raw,
-                    tried.join("\n")
-                ),
-            });
-        };
-        let dir = dir.join(message_id.to_string());
-        std::fs::create_dir_all(&dir).map_err(|e| Error::Response(e.to_string()))?;
-        let path = dir.join(safe_name(&found.name));
-        std::fs::write(&path, bytes).map_err(|e| Error::Response(e.to_string()))?;
-        Ok(path)
-    }
-
     /// Nachrichten des Tages (Startseite von WebUntis).
     pub async fn day_news(&self, date: NaiveDate) -> Result<Vec<DayNews>> {
         let v: Value = self
@@ -667,17 +498,12 @@ mod tests {
     fn attachments_in_all_shapes() {
         let v = serde_json::json!({
             "attachments": [{"id": 1, "name": "a.pdf"}],
-            "storageAttachments": [{"fileId": "x9", "fileRegularName": "b.docx", "downloadUrl": "https://s3/b"}]
+            "storageAttachments": [{"fileId": "x9", "fileRegularName": "b.docx"}]
         });
         let list = attachments(&v);
         assert_eq!(list.len(), 2);
         assert_eq!((list[0].id.as_str(), list[0].name.as_str()), ("1", "a.pdf"));
-        assert_eq!(list[1].url.as_deref(), Some("https://s3/b"));
-        assert_eq!(safe_name("../x:y?.pdf"), "_x_y_.pdf");
-        assert_eq!(
-            error_body(b"<?xml version=\"1.0\"?>\n<Error><Code>AccessDenied</Code></Error>"),
-            "<Error><Code>AccessDenied</Code></Error>"
-        );
+        assert_eq!(list[1].name, "b.docx");
     }
 
     #[test]

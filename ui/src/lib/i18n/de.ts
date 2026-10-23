@@ -309,6 +309,7 @@ export const de = {
     openWeb: "In WebUntis öffnen",
     compose: "Neue Mitteilung",
     write: "Schreiben",
+    attachmentInWeb: "Anhänge lassen sich nur in WebUntis öffnen",
     reply: "Antworten",
     replyPrefix: "AW: ",
     toLabel: "An",

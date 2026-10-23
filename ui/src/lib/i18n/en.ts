@@ -311,6 +311,7 @@ export const en: Messages = {
     openWeb: "Open in WebUntis",
     compose: "New message",
     write: "Write",
+    attachmentInWeb: "Attachments can only be opened in WebUntis",
     reply: "Reply",
     replyPrefix: "RE: ",
     toLabel: "To",
