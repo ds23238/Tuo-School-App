@@ -214,6 +214,21 @@ fn raw_attachment(v: &Value, id: &str) -> String {
     shorten(&entry.map(Value::to_string).unwrap_or_default())
 }
 
+/// Kurzfassung einer Fehlerantwort, ohne XML-Kopf.
+fn error_body(body: &[u8]) -> String {
+    let text = String::from_utf8_lossy(body);
+    let text = match text.find("?>") {
+        Some(i) if text.trim_start().starts_with("<?xml") => &text[i + 2..],
+        _ => &text,
+    };
+    let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.chars().count() > 400 {
+        format!("{}…", text.chars().take(400).collect::<String>())
+    } else {
+        text
+    }
+}
+
 fn shorten(text: &str) -> String {
     let text = text.split('?').next().unwrap_or_default();
     if text.chars().count() > 400 {
@@ -504,6 +519,10 @@ impl Session<'_> {
             let kind_text = kind.clone().unwrap_or_else(|| "?".into());
             tried.push(format!("{url} → {status} {kind_text}"));
             if !(200..300).contains(&status) || kind_text.starts_with("text/html") {
+                // Speicher-Fehler (XML/JSON) nennen meist den Grund.
+                if !kind_text.starts_with("text/html") && !body.is_empty() {
+                    tried.push(format!("  Antwort: {}", error_body(&body)));
+                }
                 continue;
             }
             // Manche Pfade liefern nur einen Link zum Dateispeicher.
@@ -655,6 +674,10 @@ mod tests {
         assert_eq!((list[0].id.as_str(), list[0].name.as_str()), ("1", "a.pdf"));
         assert_eq!(list[1].url.as_deref(), Some("https://s3/b"));
         assert_eq!(safe_name("../x:y?.pdf"), "_x_y_.pdf");
+        assert_eq!(
+            error_body(b"<?xml version=\"1.0\"?>\n<Error><Code>AccessDenied</Code></Error>"),
+            "<Error><Code>AccessDenied</Code></Error>"
+        );
     }
 
     #[test]
