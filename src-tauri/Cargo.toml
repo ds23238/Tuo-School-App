@@ -11,7 +11,9 @@ tauri-build.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-tauri.workspace = true
+# Ohne Workspace-Vererbung: Nur so erkennt das Tauri-CLI `tray-icon` und packt
+# die AppIndicator-Bibliothek ins AppImage.
+tauri = { version = "2", features = ["tray-icon"] }
 tsa-core.workspace = true
 tauri-plugin-dialog.workspace = true
 tsa-moodle.workspace = true
