@@ -316,7 +316,6 @@ export const de = {
     composeNotAllowed: "Deine Schule erlaubt dir keine Mitteilungen.",
     sentDone: "Mitteilung gesendet.",
     tooMany: "Höchstens {count} Anhänge.",
-    attachments: "Anhänge (in WebUntis)",
     state: {
       cancelled: "Entfall",
       noTeacher: "Vertretung ohne Lehrkraft",

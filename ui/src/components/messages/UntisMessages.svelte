@@ -82,6 +82,20 @@
     }
   }
 
+  let opening = $state<string | null>(null);
+  async function openAttachment(id: string) {
+    if (!detail) return;
+    opening = id;
+    error = null;
+    try {
+      await api.untis.openAttachment(detail.id, id);
+    } catch (e) {
+      error = errorText(e);
+    } finally {
+      opening = null;
+    }
+  }
+
   const time = (sent: string) => {
     const t = Date.parse(sent);
     return Number.isNaN(t) ? sent : formatShort(t / 1000);
@@ -129,7 +143,10 @@
             <span class="who">{box === "sent" ? fill(i18n.t.untis.to, { names: m.recipients || "–" }) : m.sender}</span>
             <span class="time">{time(m.sent)}</span>
           </span>
-          <span class="subject">{m.subject}</span>
+          <span class="subject">
+            {#if m.attachments}<Icon name="paperclip" size={12} />{/if}
+            {m.subject}
+          </span>
           <span class="preview">{m.preview}</span>
         </span>
       </button>
@@ -154,7 +171,14 @@
         <!-- Im Backend mit ammonia bereinigt. -->
         <div class="html">{@html detail.html}</div>
         {#if detail.attachments.length}
-          <p class="muted small"><Icon name="paperclip" size={14} /> {i18n.t.untis.attachments}: {detail.attachments.join(", ")}</p>
+          <div class="files">
+            {#each detail.attachments as a (a.id + a.name)}
+              <button class="file" onclick={() => openAttachment(a.id)} disabled={opening === a.id}>
+                <Icon name="paperclip" size={14} />
+                {a.name}
+              </button>
+            {/each}
+          </div>
         {/if}
         <div class="actions">
           {#if box === "received"}
@@ -195,6 +219,30 @@
   }
   .grow {
     flex: 1;
+  }
+  .files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .file {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .file:hover {
+    background: var(--hover);
+  }
+  .file:disabled {
+    opacity: 0.6;
+    cursor: progress;
   }
   .actions {
     display: flex;

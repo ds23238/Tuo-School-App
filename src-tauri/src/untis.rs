@@ -1,7 +1,7 @@
 //! Befehle für WebUntis und die gemeinsame Heute-Ansicht.
 
 use chrono::{Days, Local, NaiveDate};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tsa_moodle::deadlines::Deadline;
 use tsa_moodle::sync::RecentFile;
 use tsa_untis::homework::{Exam, Homework, Listed, NewExam};
@@ -104,6 +104,21 @@ pub async fn untis_message(
     let app = app.clone();
     tauri::async_runtime::spawn(async move { inbox::check_untis(&app).await });
     Ok(detail)
+}
+
+/// Lädt einen Anhang in den Cache und öffnet ihn.
+#[tauri::command]
+pub async fn untis_open_attachment(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    message_id: i64,
+    attachment_id: String,
+) -> Result<()> {
+    let dir = app.path().app_cache_dir()?.join("untis");
+    let path = untis(&state)
+        .attachment(message_id, &attachment_id, &dir)
+        .await?;
+    launch::path(&app, &path).await
 }
 
 #[tauri::command]

@@ -32,7 +32,16 @@ pub struct MessageDetail {
     /// Für Antworten; nicht jede Version liefert sie.
     pub sender_id: Option<i64>,
     pub sent: String,
-    pub attachments: Vec<String>,
+    pub attachments: Vec<Attachment>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    pub id: String,
+    pub name: String,
+    /// Direkter Link, falls WebUntis einen mitliefert.
+    pub url: Option<String>,
 }
 
 /// Mögliche Empfängerin oder möglicher Empfänger einer neuen Mitteilung.
@@ -137,6 +146,77 @@ fn recipients(v: &Value) -> String {
         .as_i64()
         .map(|n| n.to_string())
         .unwrap_or_default()
+}
+
+fn text_of(v: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|k| match &v[*k] {
+        Value::String(s) if !s.trim().is_empty() => Some(s.trim().to_owned()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    })
+}
+
+/// Anhänge einer Mitteilung; Feldnamen unterscheiden sich je nach Version.
+fn attachments(v: &Value) -> Vec<Attachment> {
+    let list = [
+        "attachments",
+        "storageAttachments",
+        "fileAttachments",
+        "attachmentList",
+        "files",
+    ]
+    .iter()
+    .filter_map(|k| v[*k].as_array())
+    .flatten();
+    let mut out: Vec<Attachment> = Vec::new();
+    for a in list {
+        let id =
+            text_of(a, &["fileId", "attachmentId", "fileAttachmentId", "id"]).unwrap_or_default();
+        let name = text_of(
+            a,
+            &[
+                "fileRegularName",
+                "fileName",
+                "regularName",
+                "name",
+                "displayName",
+            ],
+        )
+        .unwrap_or_default();
+        if (id.is_empty() && name.is_empty()) || out.iter().any(|o| o.id == id && o.name == name) {
+            continue;
+        }
+        out.push(Attachment {
+            name: if name.is_empty() {
+                format!("Anhang {id}")
+            } else {
+                name
+            },
+            url: text_of(a, &["downloadUrl", "storageUrl", "url", "src", "link"]),
+            id,
+        });
+    }
+    out
+}
+
+/// Dateiname ohne Pfadteile und unter Windows verbotene Zeichen.
+fn safe_name(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if "<>:\"/\\|?*".contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_matches('.').to_owned();
+    if cleaned.is_empty() {
+        "Anhang".into()
+    } else {
+        cleaned
+    }
 }
 
 /// Empfängerlisten: je nach Version Gruppen mit Personen oder flach.
@@ -260,14 +340,7 @@ impl Session<'_> {
                 .as_i64()
                 .or(v["sender"]["id"].as_i64()),
             sent: str_of(&v["sentDateTime"]),
-            attachments: v["attachments"]
-                .as_array()
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|a| a["name"].as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default(),
+            attachments: attachments(&v),
         })
     }
 
@@ -351,6 +424,63 @@ impl Session<'_> {
             }
         }
         Err(send_error(last.0, &last.1))
+    }
+
+    /// Lädt einen Anhang nach `dir` und liefert den Pfad. Ohne mitgelieferten
+    /// Link werden die bekannten Pfade der Weboberfläche probiert.
+    pub async fn attachment(
+        &self,
+        message_id: i64,
+        attachment_id: &str,
+        dir: &std::path::Path,
+    ) -> Result<std::path::PathBuf> {
+        let detail = self.message(message_id).await?;
+        let found = detail
+            .attachments
+            .into_iter()
+            .find(|a| a.id == attachment_id)
+            .ok_or_else(|| Error::Response("Anhang nicht gefunden".into()))?;
+        let mut candidates: Vec<String> = found.url.iter().cloned().collect();
+        candidates.extend([
+            format!("WebUntis/api/rest/view/v1/messages/{message_id}/attachments/{attachment_id}"),
+            format!("WebUntis/api/rest/view/v1/messages/attachments/{attachment_id}"),
+        ]);
+        let mut bytes = None;
+        for url in &candidates {
+            let (status, kind, body) = self.get_bytes(url).await?;
+            if !(200..300).contains(&status) {
+                continue;
+            }
+            // Manche Pfade liefern nur einen Link zum Dateispeicher.
+            if kind
+                .as_deref()
+                .is_some_and(|k| k.starts_with("application/json"))
+            {
+                let v: Value = serde_json::from_slice(&body).unwrap_or_default();
+                if let Some(link) = text_of(&v, &["downloadUrl", "storageUrl", "url", "src"]) {
+                    let (status, _, body) = self.get_bytes(&link).await?;
+                    if (200..300).contains(&status) {
+                        bytes = Some(body);
+                        break;
+                    }
+                }
+                continue;
+            }
+            if kind.as_deref().is_some_and(|k| k.starts_with("text/html")) {
+                continue;
+            }
+            bytes = Some(body);
+            break;
+        }
+        let bytes = bytes.ok_or(Error::Untis {
+            code: 404,
+            message: "Dieser Anhang lässt sich nur in WebUntis öffnen.".into(),
+        })?;
+        let dir = dir.join(message_id.to_string());
+        std::fs::create_dir_all(&dir).map_err(|e| Error::Response(e.to_string()))?;
+        let path = dir.join(safe_name(&found.name));
+        std::fs::write(&path, bytes).map_err(|e| Error::Response(e.to_string()))?;
+        Ok(path)
     }
 
     /// Nachrichten des Tages (Startseite von WebUntis).
@@ -442,6 +572,19 @@ mod tests {
             send_error(500, "").to_string(),
             "Unerwartete Antwort von WebUntis: HTTP 500"
         );
+    }
+
+    #[test]
+    fn attachments_in_all_shapes() {
+        let v = serde_json::json!({
+            "attachments": [{"id": 1, "name": "a.pdf"}],
+            "storageAttachments": [{"fileId": "x9", "fileRegularName": "b.docx", "downloadUrl": "https://s3/b"}]
+        });
+        let list = attachments(&v);
+        assert_eq!(list.len(), 2);
+        assert_eq!((list[0].id.as_str(), list[0].name.as_str()), ("1", "a.pdf"));
+        assert_eq!(list[1].url.as_deref(), Some("https://s3/b"));
+        assert_eq!(safe_name("../x:y?.pdf"), "_x_y_.pdf");
     }
 
     #[test]

@@ -404,6 +404,37 @@ impl Client {
         Ok((status, response.text().await.unwrap_or_default()))
     }
 
+    /// Lädt eine Datei. Auf dem Untis-Server mit Sitzung und Token, fremde
+    /// Speicher-Links (vorsigniert) ohne Kopfzeilen.
+    pub async fn get_bytes(
+        &self,
+        session: &str,
+        bearer: Option<&str>,
+        url: &str,
+    ) -> Result<(u16, Option<String>, Vec<u8>)> {
+        let url = self
+            .base
+            .join(url.trim_start_matches('/'))
+            .map_err(|e| Error::Response(e.to_string()))?;
+        let own = url.host_str() == self.base.host_str();
+        let request = if own {
+            self.view_request(self.http.get(url), session, bearer, &[])
+        } else {
+            self.http.get(url)
+        };
+        let response = request.send().await?;
+        let status = response.status().as_u16();
+        if own && matches!(status, 401 | 403) {
+            return Err(Error::SessionExpired);
+        }
+        let kind = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        Ok((status, kind, response.bytes().await?.to_vec()))
+    }
+
     /// Bearer-Token für `api/rest/view/…`.
     pub async fn jwt(&self, session: &str) -> Result<String> {
         let response = self

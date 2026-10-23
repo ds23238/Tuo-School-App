@@ -318,7 +318,6 @@ export const en: Messages = {
     composeNotAllowed: "Your school does not let you send messages.",
     sentDone: "Message sent.",
     tooMany: "At most {count} attachments.",
-    attachments: "Attachments (in WebUntis)",
     state: {
       cancelled: "Cancelled",
       noTeacher: "Substitution without teacher",

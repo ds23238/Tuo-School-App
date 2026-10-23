@@ -286,7 +286,7 @@ export interface UntisMessageDetail {
   sender: string;
   senderId: number | null;
   sent: string;
-  attachments: string[];
+  attachments: { id: string; name: string; url: string | null }[];
 }
 
 export interface UntisRecipient {
@@ -573,6 +573,8 @@ export const api = {
     dayNews: () => invoke<{ subject: string; html: string }[]>("untis_day_news"),
     openWeb: () => invoke<void>("untis_open_web"),
     compose: () => invoke<UntisCompose>("untis_compose"),
+    openAttachment: (messageId: number, attachmentId: string) =>
+      invoke<void>("untis_open_attachment", { messageId, attachmentId }),
     send: (message: { subject: string; content: string; recipients: number[] }, files: string[]) =>
       invoke<void>("untis_send_message", { message, files }),
   },
