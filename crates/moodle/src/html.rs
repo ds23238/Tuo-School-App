@@ -112,7 +112,7 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
                 "float-end",
             ],
         )
-        .add_allowed_classes("a", ["embed", "video", "interactive", "page"])
+        .add_allowed_classes("a", ["embed"])
         .add_allowed_classes(
             "span",
             ["embed-tile", "embed-text", "embed-kind", "embed-name"],
@@ -150,9 +150,8 @@ pub fn sanitize(html: &str, base: &Url, media: &MediaUrls) -> String {
 }
 
 /// Ersetzt eingebettete Seiten (Videos, H5P, Formulare …) durch einen Link
-/// im Stil eines Link-Elements: Fremde Inhalte laufen nicht im App-Fenster,
-/// sind aber erreichbar. Die Art (Video, interaktiv, Seite) steht als Klasse
-/// dran, die Beschriftung setzt die Oberfläche.
+/// genau wie ein Link-Element im Kurs: Fremde Inhalte laufen nicht im
+/// App-Fenster, sind aber erreichbar. Art und Symbol setzt die Oberfläche.
 fn iframes_to_links(html: &str) -> std::borrow::Cow<'_, str> {
     use std::sync::LazyLock;
     static IFRAME: LazyLock<regex::Regex> = LazyLock::new(|| {
@@ -186,49 +185,21 @@ fn iframes_to_links(html: &str) -> std::borrow::Cow<'_, str> {
         if Url::parse(&href).is_ok_and(|u| !matches!(u.scheme(), "http" | "https")) {
             return String::new();
         }
-        let host = Url::parse(&href)
-            .ok()
-            .and_then(|u| {
-                u.host_str()
-                    .map(|h| h.trim_start_matches("www.").to_owned())
-            })
-            .unwrap_or_default();
-        let kind = embed_kind(&href, &host);
-        // Ohne Titel wird der Host zum Namen und fehlt in der Art-Zeile.
-        let (label, host) = match title {
-            Some(title) => (title, host),
-            None if host.is_empty() => (href.clone(), host),
-            None => (host, String::new()),
-        };
+        let label = title.unwrap_or_else(|| {
+            Url::parse(&href)
+                .ok()
+                .and_then(|u| {
+                    u.host_str()
+                        .map(|h| h.trim_start_matches("www.").to_owned())
+                })
+                .unwrap_or_else(|| href.clone())
+        });
         format!(
-            r#"<p><a class="embed {kind}" href="{}"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind">{}</span><span class="embed-name">{}</span></span></a></p>"#,
+            r#"<p><a class="embed" href="{}"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">{}</span></span></a></p>"#,
             html_escape::encode_double_quoted_attribute(&href),
-            html_escape::encode_text(&host),
             html_escape::encode_text(&label)
         )
     })
-}
-
-/// Art eines eingebetteten Inhalts für Symbol und Beschriftung.
-fn embed_kind(href: &str, host: &str) -> &'static str {
-    const VIDEO: &[&str] = &[
-        "youtube.com",
-        "youtu.be",
-        "youtube-nocookie.com",
-        "vimeo.com",
-        "player.vimeo.com",
-        "dailymotion.com",
-        "ardmediathek.de",
-        "zdf.de",
-    ];
-    let path = href.to_ascii_lowercase();
-    if VIDEO.contains(&host) || path.contains("/mod/bigbluebuttonbn/") {
-        "video"
-    } else if path.contains("h5p") || path.contains("learningapps") || path.contains("/mod/hvp/") {
-        "interactive"
-    } else {
-        "page"
-    }
 }
 
 /// Eingebettete YouTube- und Vimeo-Player als normale Seite öffnen.
@@ -325,8 +296,8 @@ mod tests {
         assert_eq!(
             out,
             concat!(
-                r#"<p><a class="embed video" href="https://www.youtube.com/watch?v=abc123" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind">youtube.com</span><span class="embed-name">Mein &amp; Video</span></span></a></p>"#,
-                r#"<p><a class="embed interactive" href="https://h5p.example/x" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">h5p.example</span></span></a></p>"#
+                r#"<p><a class="embed" href="https://www.youtube.com/watch?v=abc123" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">Mein &amp; Video</span></span></a></p>"#,
+                r#"<p><a class="embed" href="https://h5p.example/x" rel="noopener noreferrer"><span class="embed-tile"></span><span class="embed-text"><span class="embed-kind"></span><span class="embed-name">h5p.example</span></span></a></p>"#
             )
         );
         assert_eq!(clean(r#"<iframe src="javascript:alert(1)"></iframe>"#), "");

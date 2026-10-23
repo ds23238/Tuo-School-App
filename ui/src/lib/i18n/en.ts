@@ -123,9 +123,6 @@ export const en: Messages = {
     noMatch: "No course matches your search.",
   },
   course: {
-    embedPage: "Embedded page",
-    embedVideo: "Video",
-    embedInteractive: "Interactive content",
     back: "My courses",
     loading: "Loading course …",
     offline: "Offline – as of {date}",

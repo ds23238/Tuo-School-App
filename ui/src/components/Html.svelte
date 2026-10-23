@@ -21,9 +21,7 @@
 <div
   class="html"
   {onclick}
-  style:--embed-page={JSON.stringify(i18n.t.course.embedPage)}
-  style:--embed-video={JSON.stringify(i18n.t.course.embedVideo)}
-  style:--embed-interactive={JSON.stringify(i18n.t.course.embedInteractive)}
+  style:--embed-label={JSON.stringify(i18n.t.kinds.url)}
 >
   {@html html}
 </div>
@@ -95,32 +93,15 @@
   .html :global(a) {
     color: var(--accent-strong);
   }
-  /* Eingebettete Seiten (iframes) erscheinen wie ein Link-Element im Kurs,
-     siehe html.rs. Symbole als Maske, damit sie die Farbe übernehmen. */
+  /* Eingebettete Seiten (iframes) werden zum Link-Element, genau wie eine
+     Link-Aktivität im Kurs (siehe ModuleRow und html.rs). */
   .html :global(a.embed) {
-    --c: var(--p-content);
-    --bg: var(--p-content-soft);
-    --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/><path d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/></svg>");
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 14px;
-    max-width: 520px;
-    padding: 10px 14px 10px 10px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
+    padding: 6px 0;
     color: var(--text);
     text-decoration: none;
-  }
-  .html :global(a.embed.video) {
-    --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M2 6h14v12H2z'/><path d='m16 10 6-4v12l-6-4'/></svg>");
-    --label: var(--embed-video);
-  }
-  .html :global(a.embed.interactive) {
-    --c: var(--p-interactive);
-    --bg: var(--p-interactive-soft);
-    --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20'/><path d='m10 8 6 4-6 4z'/></svg>");
-    --label: var(--embed-interactive);
   }
   .html :global(.embed-tile) {
     flex: none;
@@ -130,51 +111,49 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg);
+    background: var(--p-content-soft);
   }
   .html :global(.embed-tile)::before {
     content: "";
-    width: 22px;
-    height: 22px;
-    background: var(--c);
-    -webkit-mask: var(--icon) center / contain no-repeat;
-    mask: var(--icon) center / contain no-repeat;
-  }
-  .html :global(a.embed)::after {
-    content: "";
-    flex: none;
-    width: 14px;
-    height: 14px;
-    margin-left: auto;
-    background: var(--muted);
-    -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>") center / contain no-repeat;
-    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>") center / contain no-repeat;
-  }
-  .html :global(a.embed:hover) {
-    border-color: var(--c);
+    width: 20px;
+    height: 20px;
+    background: var(--p-content);
+    -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/><path d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/></svg>") center / contain no-repeat;
+    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/><path d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/></svg>") center / contain no-repeat;
   }
   .html :global(.embed-text) {
     display: flex;
     flex-direction: column;
+    gap: 2px;
     min-width: 0;
   }
   .html :global(.embed-kind) {
     font-size: 12px;
     font-weight: 500;
+    line-height: 1.5;
     color: var(--muted);
   }
   .html :global(.embed-kind)::before {
-    content: var(--label, var(--embed-page)) " · ";
-  }
-  .html :global(.embed-kind:empty)::before {
-    content: var(--label, var(--embed-page));
+    content: var(--embed-label);
   }
   .html :global(.embed-name) {
     font-weight: 600;
     font-size: 15px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.4;
+  }
+  .html :global(.embed-name)::after {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    vertical-align: -2px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>") center / contain no-repeat;
+    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'/></svg>") center / contain no-repeat;
+  }
+  .html :global(a.embed:hover) {
+    color: var(--accent-strong);
   }
   .html :global(table) {
     border-collapse: collapse;
