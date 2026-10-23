@@ -122,7 +122,7 @@
       </button>
       <span class="grow"></span>
       <button class="btn small primary" onclick={() => write()} title={i18n.t.untis.compose}>
-        <Icon name="plus" size={14} />{i18n.t.untis.compose}
+        <Icon name="edit" size={14} />{i18n.t.untis.write}
       </button>
     </div>
     {#each box === "received" ? news : [] as n, i (i)}
@@ -251,6 +251,7 @@
   }
   .boxes {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     padding: 10px 12px;
@@ -268,6 +269,10 @@
     font-weight: 500;
     color: var(--text-2);
     cursor: pointer;
+    white-space: nowrap;
+  }
+  .boxes .btn {
+    white-space: nowrap;
   }
   .chip.on {
     background: var(--text);
@@ -376,6 +381,10 @@
   }
   .notice {
     margin: 12px 20px 0;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    user-select: text;
+    -webkit-user-select: text;
   }
   .empty {
     flex: 1;

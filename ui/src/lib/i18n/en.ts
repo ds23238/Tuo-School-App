@@ -310,6 +310,7 @@ export const en: Messages = {
     selectMessage: "Pick a message on the left.",
     openWeb: "Open in WebUntis",
     compose: "New message",
+    write: "Write",
     reply: "Reply",
     replyPrefix: "RE: ",
     toLabel: "To",

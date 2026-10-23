@@ -308,6 +308,7 @@ export const de = {
     selectMessage: "Wähle links eine Mitteilung.",
     openWeb: "In WebUntis öffnen",
     compose: "Neue Mitteilung",
+    write: "Schreiben",
     reply: "Antworten",
     replyPrefix: "AW: ",
     toLabel: "An",

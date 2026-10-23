@@ -199,6 +199,30 @@ fn attachments(v: &Value) -> Vec<Attachment> {
     out
 }
 
+/// Der gelieferte Eintrag eines Anhangs, für Fehlermeldungen; Links mit
+/// Signatur werden gekürzt.
+fn raw_attachment(v: &Value, id: &str) -> String {
+    let entry = v
+        .as_object()
+        .into_iter()
+        .flat_map(|o| o.values())
+        .filter_map(Value::as_array)
+        .flatten()
+        .find(|a| {
+            text_of(a, &["fileId", "attachmentId", "fileAttachmentId", "id"]).as_deref() == Some(id)
+        });
+    shorten(&entry.map(Value::to_string).unwrap_or_default())
+}
+
+fn shorten(text: &str) -> String {
+    let text = text.split('?').next().unwrap_or_default();
+    if text.chars().count() > 400 {
+        format!("{}…", text.chars().take(400).collect::<String>())
+    } else {
+        text.to_owned()
+    }
+}
+
 /// Dateiname ohne Pfadteile und unter Windows verbotene Zeichen.
 fn safe_name(name: &str) -> String {
     let cleaned: String = name
@@ -427,55 +451,96 @@ impl Session<'_> {
     }
 
     /// Lädt einen Anhang nach `dir` und liefert den Pfad. Ohne mitgelieferten
-    /// Link werden die bekannten Pfade der Weboberfläche probiert.
+    /// Link werden mögliche Pfade der Weboberfläche probiert; schlägt alles
+    /// fehl, nennt der Fehler jeden Versuch und die gelieferten Daten.
     pub async fn attachment(
         &self,
         message_id: i64,
         attachment_id: &str,
         dir: &std::path::Path,
     ) -> Result<std::path::PathBuf> {
-        let detail = self.message(message_id).await?;
-        let found = detail
-            .attachments
+        let v: Value = self
+            .rest(
+                true,
+                &format!("WebUntis/api/rest/view/v1/messages/{message_id}"),
+                &[],
+            )
+            .await?;
+        let found = attachments(&v)
             .into_iter()
             .find(|a| a.id == attachment_id)
             .ok_or_else(|| Error::Response("Anhang nicht gefunden".into()))?;
+        let raw = raw_attachment(&v, attachment_id);
+
+        let base = "WebUntis/api/rest/view";
+        let (m, a) = (message_id, attachment_id);
         let mut candidates: Vec<String> = found.url.iter().cloned().collect();
         candidates.extend([
-            format!("WebUntis/api/rest/view/v1/messages/{message_id}/attachments/{attachment_id}"),
-            format!("WebUntis/api/rest/view/v1/messages/attachments/{attachment_id}"),
+            format!("{base}/v1/messages/{m}/attachments/{a}"),
+            format!("{base}/v1/messages/attachments/{a}"),
+            format!("{base}/v1/messages/{m}/attachment/{a}"),
+            format!("{base}/v1/messages/attachment/{a}"),
+            format!("{base}/v1/messages/{m}/attachmentstorageurl/{a}"),
+            format!("{base}/v1/messages/attachmentstorageurl/{a}"),
+            format!("{base}/v2/messages/{m}/attachments/{a}"),
+            format!("{base}/v2/messages/attachments/{a}"),
         ]);
+        let mut tried = Vec::new();
         let mut bytes = None;
-        for url in &candidates {
-            let (status, kind, body) = self.get_bytes(url).await?;
-            if !(200..300).contains(&status) {
+        'outer: for url in &candidates {
+            let (status, kind, body) = match self.get_bytes(url).await {
+                Ok(r) => r,
+                Err(Error::Network(e)) if e.status().is_none() && !e.is_connect() => {
+                    tried.push(format!("{url} → {e}"));
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            let kind_text = kind.clone().unwrap_or_else(|| "?".into());
+            tried.push(format!("{url} → {status} {kind_text}"));
+            if !(200..300).contains(&status) || kind_text.starts_with("text/html") {
                 continue;
             }
             // Manche Pfade liefern nur einen Link zum Dateispeicher.
-            if kind
-                .as_deref()
-                .is_some_and(|k| k.starts_with("application/json"))
-            {
-                let v: Value = serde_json::from_slice(&body).unwrap_or_default();
-                if let Some(link) = text_of(&v, &["downloadUrl", "storageUrl", "url", "src"]) {
-                    let (status, _, body) = self.get_bytes(&link).await?;
-                    if (200..300).contains(&status) {
-                        bytes = Some(body);
-                        break;
-                    }
+            if kind_text.contains("json") || kind_text.starts_with("text/plain") {
+                let text = String::from_utf8_lossy(&body).trim().to_owned();
+                let v: Value = serde_json::from_str(&text).unwrap_or_default();
+                let link = text_of(&v, &["downloadUrl", "storageUrl", "url", "src"])
+                    .or(v.as_str().map(str::to_owned))
+                    .or(
+                        (text.starts_with("http") && !text.contains(char::is_whitespace))
+                            .then_some(text.clone()),
+                    );
+                let Some(link) = link else {
+                    tried.push(format!("  Antwort: {}", shorten(&text)));
+                    continue;
+                };
+                let (status, kind, body) = self.get_bytes(&link).await?;
+                tried.push(format!(
+                    "  → {} → {status} {}",
+                    shorten(&link),
+                    kind.unwrap_or_default()
+                ));
+                if (200..300).contains(&status) {
+                    bytes = Some(body);
+                    break 'outer;
                 }
-                continue;
-            }
-            if kind.as_deref().is_some_and(|k| k.starts_with("text/html")) {
                 continue;
             }
             bytes = Some(body);
             break;
         }
-        let bytes = bytes.ok_or(Error::Untis {
-            code: 404,
-            message: "Dieser Anhang lässt sich nur in WebUntis öffnen.".into(),
-        })?;
+        let Some(bytes) = bytes else {
+            return Err(Error::Untis {
+                code: 404,
+                message: format!(
+                    "„{}“ ließ sich nicht laden.\nDaten: {}\nVersucht:\n{}",
+                    found.name,
+                    raw,
+                    tried.join("\n")
+                ),
+            });
+        };
         let dir = dir.join(message_id.to_string());
         std::fs::create_dir_all(&dir).map_err(|e| Error::Response(e.to_string()))?;
         let path = dir.join(safe_name(&found.name));

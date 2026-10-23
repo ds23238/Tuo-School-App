@@ -422,11 +422,10 @@ impl Client {
         } else {
             self.http.get(url)
         };
+        // Status unverändert zurück: Bei geratenen Pfaden heißt 403 nicht,
+        // dass die Sitzung abgelaufen ist.
         let response = request.send().await?;
         let status = response.status().as_u16();
-        if own && matches!(status, 401 | 403) {
-            return Err(Error::SessionExpired);
-        }
         let kind = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
