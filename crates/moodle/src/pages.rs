@@ -129,11 +129,29 @@ impl Session<'_> {
                 })
                 .and_then(|c| c.fileurl.clone())
         };
+        // Bei Textseiten fehlt in der Adresse von index.html die Revision
+        // (`…/content/index.html`), die Bilder liegen unter `…/content/6/`.
+        // Relative Bilder werden daher gegen eine Nachbardatei aufgelöst.
+        let sibling = |path: &str| {
+            module
+                .contents
+                .iter()
+                .find(|c| {
+                    c.kind == "file"
+                        && c.filename != "index.html"
+                        && c.filepath.as_deref() == Some(path)
+                })
+                .and_then(|c| c.fileurl.clone())
+        };
         let mut chapters = Vec::new();
         match module.modname.as_str() {
             "page" => {
                 let url = file("/").ok_or(Error::FileNotFound)?;
-                chapters.push(self.chapter(&module.name, 0, &url).await?);
+                let mut chapter = self.chapter(&module.name, 0, &url).await?;
+                if let Some(base) = sibling("/") {
+                    chapter.base = base;
+                }
+                chapters.push(chapter);
             }
             "book" => {
                 let structure = module

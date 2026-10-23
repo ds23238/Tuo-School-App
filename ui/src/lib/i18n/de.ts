@@ -121,6 +121,9 @@ export const de = {
     noMatch: "Kein Kurs passt zur Suche.",
   },
   course: {
+    embedPage: "Eingebettete Seite",
+    embedVideo: "Video",
+    embedInteractive: "Interaktiver Inhalt",
     back: "Meine Kurse",
     loading: "Kurs wird geladen …",
     offline: "Offline – Stand vom {date}",
