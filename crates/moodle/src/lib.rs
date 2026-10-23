@@ -5,6 +5,7 @@ pub mod assign;
 pub mod client;
 pub mod contents;
 pub mod courses;
+pub mod data;
 pub mod deadlines;
 pub mod error;
 pub mod forum;

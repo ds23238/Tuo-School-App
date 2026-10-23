@@ -196,6 +196,29 @@ export interface Thread {
   posts: ForumPost[];
 }
 
+export interface DataField {
+  id: number;
+  name: string;
+  kind: string;
+}
+
+export interface DataEntry {
+  id: number;
+  author: string;
+  created: number;
+  modified: number;
+  approved: boolean;
+  values: { fieldId: number; html: string; date: number | null }[];
+}
+
+export interface MoodleDatabase {
+  id: number;
+  fields: DataField[];
+  entries: DataEntry[];
+  canAdd: boolean;
+  addUrl: string;
+}
+
 export interface AssignFile {
   name: string;
   size: number;
@@ -555,6 +578,8 @@ export const api = {
       invoke<void>("moodle_forum_reply", { postId, subject, text }),
     forumAdd: (courseId: number, moduleId: number, subject: string, text: string) =>
       invoke<number>("moodle_forum_add", { courseId, moduleId, subject, text }),
+    database: (courseId: number, moduleId: number) =>
+      invoke<Cached<MoodleDatabase>>("moodle_database", { courseId, moduleId }),
     forumAttachment: (discussionId: number, postId: number, name: string) =>
       invoke<void>("moodle_forum_attachment", { discussionId, postId, name }),
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),

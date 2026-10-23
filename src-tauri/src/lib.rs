@@ -112,6 +112,7 @@ pub fn run() {
             activities::moodle_forum_reply,
             activities::moodle_forum_add,
             activities::moodle_forum_attachment,
+            activities::moodle_database,
             commands::get_settings,
             commands::save_settings,
             commands::list_accounts,

@@ -3,6 +3,7 @@
 use tauri::{AppHandle, Manager, State};
 use tsa_moodle::Session;
 use tsa_moodle::activities::Cached;
+use tsa_moodle::data::Database;
 use tsa_moodle::forum::{Forum, Thread};
 
 use crate::error::Result;
@@ -67,4 +68,15 @@ pub async fn moodle_forum_attachment(
         .forum_attachment(discussion_id, post_id, &name, &dir)
         .await?;
     launch::path(&app, &path).await
+}
+
+#[tauri::command]
+pub async fn moodle_database(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<Cached<Database>> {
+    Ok(moodle(&state)
+        .database(course_id, module_id, &media::urls())
+        .await?)
 }

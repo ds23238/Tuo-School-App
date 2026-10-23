@@ -166,6 +166,14 @@ export const de = {
     replyPlaceholder: "Deine Antwort …",
     send: "Senden",
   },
+  data: {
+    add: "Eintrag hinzufügen",
+    search: "Einträge durchsuchen",
+    empty: "Noch keine Einträge.",
+    noMatch: "Kein Eintrag passt zur Suche.",
+    count: "{n} Einträge",
+    pending: "Noch nicht freigegeben",
+  },
   page: {
     contents: "Inhalt",
     loading: "Wird geladen …",

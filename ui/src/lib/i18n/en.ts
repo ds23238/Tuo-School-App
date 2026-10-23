@@ -168,6 +168,14 @@ export const en: Messages = {
     replyPlaceholder: "Your reply …",
     send: "Send",
   },
+  data: {
+    add: "Add entry",
+    search: "Search entries",
+    empty: "No entries yet.",
+    noMatch: "No entry matches your search.",
+    count: "{n} entries",
+    pending: "Awaiting approval",
+  },
   page: {
     contents: "Contents",
     loading: "Loading …",
