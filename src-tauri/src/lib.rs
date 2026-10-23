@@ -170,6 +170,8 @@ pub fn run() {
             untis::untis_messages,
             untis::untis_sent_messages,
             untis::untis_message,
+            untis::untis_compose,
+            untis::untis_send_message,
             untis::untis_day_news,
             untis::untis_open_web,
             untis::moodle_deadlines,

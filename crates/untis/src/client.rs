@@ -70,6 +70,39 @@ fn rpc_result(value: Value) -> Result<Value> {
         .ok_or_else(|| Error::Response("ohne result".into()))
 }
 
+/// Token aus `api/token/new`: je nach Version roher Text, JSON-String
+/// oder ein Objekt mit `accessToken`.
+fn token_from(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() || raw.starts_with('<') {
+        return None;
+    }
+    let token = match serde_json::from_str::<Value>(raw) {
+        Ok(Value::String(s)) => s,
+        Ok(Value::Object(map)) => ["accessToken", "token", "access_token", "jwt"]
+            .iter()
+            .find_map(|k| map.get(*k).and_then(Value::as_str))?
+            .to_owned(),
+        _ => raw.trim_matches('"').to_owned(),
+    };
+    let token = token.trim().to_owned();
+    (!token.is_empty()).then_some(token)
+}
+
+/// Mandant (Schule) aus dem Token; manche Schnittstellen verlangen ihn.
+fn tenant_id(token: &str) -> Option<String> {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let payload = token.split('.').nth(1)?;
+    let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
+    let value: Value = serde_json::from_slice(&bytes).ok()?;
+    let tenant = value.get("tenant_id").or(value.get("tenantId"))?;
+    match tenant {
+        Value::String(s) if !s.is_empty() => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
 /// Sucht Schulen nach Name oder Ort.
 pub async fn search_schools(query: &str) -> Result<Vec<School>> {
     // Für Tests gegen einen nachgebauten Server.
@@ -285,18 +318,46 @@ impl Client {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
+        self.rest_with(session, bearer, path, query, &[]).await
+    }
+
+    /// Kopfzeilen für `api/rest/view/…`: Sitzung, Token und Mandant.
+    fn view_request(
+        &self,
+        builder: reqwest::RequestBuilder,
+        session: &str,
+        bearer: Option<&str>,
+        extra: &[(&str, String)],
+    ) -> reqwest::RequestBuilder {
+        let mut request = builder
+            .header(reqwest::header::COOKIE, self.cookies(session))
+            .header(reqwest::header::ACCEPT, "application/json");
+        if let Some(token) = bearer {
+            request = request.bearer_auth(token);
+            if let Some(tenant) = tenant_id(token) {
+                request = request.header("Tenant-Id", tenant);
+            }
+        }
+        for (k, v) in extra {
+            request = request.header(*k, v);
+        }
+        request
+    }
+
+    pub async fn rest_with<T: DeserializeOwned>(
+        &self,
+        session: &str,
+        bearer: Option<&str>,
+        path: &str,
+        query: &[(&str, String)],
+        extra: &[(&str, String)],
+    ) -> Result<T> {
         let mut url = self.url(path);
         if !query.is_empty() {
             url.query_pairs_mut()
                 .extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())));
         }
-        let mut request = self
-            .http
-            .get(url)
-            .header(reqwest::header::COOKIE, self.cookies(session));
-        if let Some(token) = bearer {
-            request = request.bearer_auth(token);
-        }
+        let request = self.view_request(self.http.get(url), session, bearer, extra);
         let response = request.send().await?;
         if matches!(response.status().as_u16(), 401 | 403) {
             return Err(Error::SessionExpired);
@@ -313,6 +374,36 @@ impl Client {
         })
     }
 
+    /// Sendet ein Formular wie die Weboberfläche: ein JSON-Teil `request`
+    /// und Dateien als `attachments`. Liefert Status und Antworttext.
+    pub async fn post_form(
+        &self,
+        session: &str,
+        bearer: Option<&str>,
+        path: &str,
+        extra: &[(&str, String)],
+        request_json: String,
+        files: Vec<(String, Vec<u8>)>,
+    ) -> Result<(u16, String)> {
+        let json = reqwest::multipart::Part::text(request_json)
+            .mime_str("application/json; charset=utf-8")
+            .expect("gültiger MIME-Typ");
+        let mut form = reqwest::multipart::Form::new().part("request", json);
+        for (name, bytes) in files {
+            form = form.part(
+                "attachments",
+                reqwest::multipart::Part::bytes(bytes).file_name(name),
+            );
+        }
+        let request = self.view_request(self.http.post(self.url(path)), session, bearer, extra);
+        let response = request.multipart(form).send().await?;
+        let status = response.status().as_u16();
+        if matches!(status, 401 | 403) {
+            return Err(Error::SessionExpired);
+        }
+        Ok((status, response.text().await.unwrap_or_default()))
+    }
+
     /// Bearer-Token für `api/rest/view/…`.
     pub async fn jwt(&self, session: &str) -> Result<String> {
         let response = self
@@ -324,15 +415,37 @@ impl Client {
         if matches!(response.status().as_u16(), 401 | 403) {
             return Err(Error::SessionExpired);
         }
-        let token = response.error_for_status()?.text().await?;
-        let token = token.trim();
-        if token.is_empty() || token.starts_with('<') {
-            return Err(Error::SessionExpired);
-        }
-        Ok(token.to_owned())
+        let raw = response.error_for_status()?.text().await?;
+        token_from(&raw).ok_or(Error::SessionExpired)
     }
 
     pub fn base(&self) -> &Url {
         &self.base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokens_in_all_shapes() {
+        assert_eq!(token_from("abc.def.ghi").as_deref(), Some("abc.def.ghi"));
+        assert_eq!(token_from("\"abc\"").as_deref(), Some("abc"));
+        assert_eq!(
+            token_from(r#"{"accessToken":"xyz"}"#).as_deref(),
+            Some("xyz")
+        );
+        assert_eq!(token_from("<html>"), None);
+        assert_eq!(token_from(""), None);
+    }
+
+    #[test]
+    fn tenant_from_jwt() {
+        // {"tenant_id":"4711"} als Base64url
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let token = format!("x.{}.y", URL_SAFE_NO_PAD.encode(r#"{"tenant_id":"4711"}"#));
+        assert_eq!(tenant_id(&token).as_deref(), Some("4711"));
+        assert_eq!(tenant_id("kein-jwt"), None);
     }
 }

@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Result, Session, cache, untis_date};
+use crate::{Error, Result, Session, cache, untis_date};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,8 +29,40 @@ pub struct MessageDetail {
     /// Bereinigtes HTML.
     pub html: String,
     pub sender: String,
+    /// Für Antworten; nicht jede Version liefert sie.
+    pub sender_id: Option<i64>,
     pub sent: String,
     pub attachments: Vec<String>,
+}
+
+/// Mögliche Empfängerin oder möglicher Empfänger einer neuen Mitteilung.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Recipient {
+    pub id: i64,
+    pub name: String,
+    /// Gruppe wie geliefert, z. B. `TEACHER`.
+    pub group: String,
+    pub tags: Vec<String>,
+}
+
+/// Was beim Schreiben erlaubt ist.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Compose {
+    pub allowed: bool,
+    pub recipients: Vec<Recipient>,
+    /// Bytes je Datei.
+    pub max_file_size: Option<i64>,
+    pub max_file_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Outgoing {
+    pub subject: String,
+    pub content: String,
+    pub recipients: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,7 +108,10 @@ fn message(v: &Value) -> Option<Message> {
         preview: crate::plain(v["contentPreview"].as_str().unwrap_or_default()),
         sender: str_of(&v["sender"]["displayName"]),
         sent: str_of(&v["sentDateTime"]),
-        read: v["isMessageRead"].as_bool().unwrap_or(true),
+        read: v["isMessageRead"]
+            .as_bool()
+            .or(v["read"].as_bool())
+            .unwrap_or(true),
         attachments: v["hasAttachments"].as_bool().unwrap_or(false),
         recipients: recipients(v),
     })
@@ -102,6 +137,78 @@ fn recipients(v: &Value) -> String {
         .as_i64()
         .map(|n| n.to_string())
         .unwrap_or_default()
+}
+
+/// Empfängerlisten: je nach Version Gruppen mit Personen oder flach.
+fn recipient_list(v: &Value) -> Vec<Recipient> {
+    let groups = v
+        .as_array()
+        .or(v["groups"].as_array())
+        .or(v["persons"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut out: Vec<Recipient> = Vec::new();
+    let mut add = |p: &Value, group: &str| {
+        let Some(id) = p["userId"].as_i64().or(p["id"].as_i64()) else {
+            return;
+        };
+        if out.iter().any(|r| r.id == id) {
+            return;
+        }
+        out.push(Recipient {
+            id,
+            name: p["displayName"]
+                .as_str()
+                .or(p["name"].as_str())
+                .unwrap_or_default()
+                .to_owned(),
+            group: group.to_owned(),
+            tags: p["tags"]
+                .as_array()
+                .map(|t| {
+                    t.iter()
+                        .filter_map(|t| t.as_str().or(t["name"].as_str()).map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        });
+    };
+    for g in &groups {
+        match g["persons"].as_array() {
+            Some(persons) => {
+                let group = g["type"].as_str().unwrap_or_default();
+                persons.iter().for_each(|p| add(p, group));
+            }
+            None => add(g, g["type"].as_str().unwrap_or_default()),
+        }
+    }
+    out.sort_by_key(|r| r.name.to_lowercase());
+    out
+}
+
+/// Fehlermeldung aus einer abgelehnten Anfrage.
+fn send_error(status: u16, body: &str) -> Error {
+    let v: Value = serde_json::from_str(body).unwrap_or_default();
+    let mut parts: Vec<String> = v["validationErrors"]
+        .as_array()
+        .map(|e| {
+            e.iter()
+                .filter_map(|e| e["errorMessage"].as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    if parts.is_empty() {
+        if let Some(m) = v["errorMessage"].as_str().or(v["message"].as_str()) {
+            parts.push(m.to_owned());
+        }
+    }
+    if parts.is_empty() {
+        return Error::Response(format!("HTTP {status}"));
+    }
+    Error::Untis {
+        code: status.into(),
+        message: parts.join("\n"),
+    }
 }
 
 const SEEN: &str = "messages.seen";
@@ -149,6 +256,9 @@ impl Session<'_> {
             subject: str_of(&v["subject"]),
             html: clean(content),
             sender: str_of(&v["sender"]["displayName"]),
+            sender_id: v["sender"]["userId"]
+                .as_i64()
+                .or(v["sender"]["id"].as_i64()),
             sent: str_of(&v["sentDateTime"]),
             attachments: v["attachments"]
                 .as_array()
@@ -159,6 +269,88 @@ impl Session<'_> {
                 })
                 .unwrap_or_default(),
         })
+    }
+
+    /// Berechtigungen und Empfänger zum Schreiben.
+    pub async fn compose(&self) -> Result<Compose> {
+        let permissions: Value = self
+            .rest(true, "WebUntis/api/rest/view/v1/messages/permissions", &[])
+            .await?;
+        let options = permissions["recipientOptions"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let mut recipients = Vec::new();
+        if !options.is_empty() {
+            for version in ["v2", "v1"] {
+                let path =
+                    format!("WebUntis/api/rest/view/{version}/messages/recipients/static/persons");
+                match self.rest::<Value>(true, &path, &[]).await {
+                    Ok(v) => {
+                        recipients = recipient_list(&v);
+                        break;
+                    }
+                    Err(Error::Network(e)) if e.status().is_none() => {
+                        return Err(Error::Network(e));
+                    }
+                    Err(_) => {}
+                }
+            }
+        }
+        Ok(Compose {
+            allowed: !options.is_empty() && !recipients.is_empty(),
+            recipients,
+            max_file_size: permissions["maxFileSize"].as_i64(),
+            max_file_count: permissions["maxFileCount"].as_i64(),
+        })
+    }
+
+    /// Sendet eine Mitteilung wie die Weboberfläche (mit Anhängen).
+    pub async fn send_message(&self, message: Outgoing, files: &[(String, Vec<u8>)]) -> Result<()> {
+        let permissions: Value = self
+            .rest(true, "WebUntis/api/rest/view/v1/messages/permissions", &[])
+            .await?;
+        let options: Vec<&str> = permissions["recipientOptions"]
+            .as_array()
+            .map(|o| o.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let option = options
+            .iter()
+            .find(|o| **o == "TEACHER")
+            .or(options.first())
+            .ok_or_else(|| Error::Untis {
+                code: 403,
+                message: "Die Schule erlaubt keine Mitteilungen".into(),
+            })?;
+        let request = serde_json::json!({
+            "subject": message.subject,
+            "content": message.content,
+            "recipientOption": option,
+            "recipientPersons": message.recipients.iter().map(|id| serde_json::json!({ "id": id })).collect::<Vec<_>>(),
+            "recipientGroups": [],
+        })
+        .to_string();
+        let mut extra = Vec::new();
+        if let Ok(year) = self
+            .rpc::<Value>("getCurrentSchoolyear", Value::Object(Default::default()))
+            .await
+        {
+            if let Some(id) = year["id"].as_i64() {
+                extra.push(("X-Webuntis-Api-School-Year-Id", id.to_string()));
+            }
+        }
+        let mut last = (0, String::new());
+        for version in ["v2", "v1"] {
+            let path = format!("WebUntis/api/rest/view/{version}/messages");
+            last = self.post_form(&path, &extra, &request, files).await?;
+            if (200..300).contains(&last.0) {
+                return Ok(());
+            }
+            if !matches!(last.0, 404 | 405 | 500) {
+                break;
+            }
+        }
+        Err(send_error(last.0, &last.1))
     }
 
     /// Nachrichten des Tages (Startseite von WebUntis).
@@ -221,6 +413,36 @@ impl Session<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recipients_grouped_or_flat() {
+        let grouped = serde_json::json!([
+            {"type": "TEACHER", "persons": [
+                {"userId": 2, "displayName": "Müller", "tags": ["MÜ"]},
+                {"userId": 1, "displayName": "Adler", "tags": []}
+            ]},
+            {"type": "STAFF", "persons": [{"userId": 2, "displayName": "Müller"}]}
+        ]);
+        let list = recipient_list(&grouped);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "Adler");
+        assert_eq!(list[1].tags, vec!["MÜ"]);
+        let flat = serde_json::json!({"persons": [{"id": 5, "name": "X"}]});
+        assert_eq!(recipient_list(&flat)[0].id, 5);
+    }
+
+    #[test]
+    fn send_errors_readable() {
+        let e = send_error(
+            400,
+            r#"{"validationErrors":[{"errorMessage":"Betreff fehlt"}]}"#,
+        );
+        assert_eq!(e.to_string(), "Betreff fehlt");
+        assert_eq!(
+            send_error(500, "").to_string(),
+            "Unerwartete Antwort von WebUntis: HTTP 500"
+        );
+    }
 
     #[test]
     fn plain_text_keeps_lines() {

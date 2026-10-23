@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 use tsa_moodle::deadlines::Deadline;
 use tsa_moodle::sync::RecentFile;
 use tsa_untis::homework::{Exam, Homework, Listed, NewExam};
-use tsa_untis::messages::{DayNews, Message, MessageDetail};
+use tsa_untis::messages::{Compose, DayNews, Message, MessageDetail, Outgoing};
 use tsa_untis::timetable::{Lesson, Week};
 use tsa_untis::{LoginResult, School, Session};
 
@@ -104,6 +104,32 @@ pub async fn untis_message(
     let app = app.clone();
     tauri::async_runtime::spawn(async move { inbox::check_untis(&app).await });
     Ok(detail)
+}
+
+#[tauri::command]
+pub async fn untis_compose(state: State<'_, AppState>) -> Result<Compose> {
+    Ok(untis(&state).compose().await?)
+}
+
+/// Neue Mitteilung; Anhänge als Dateipfade aus dem Auswahldialog.
+#[tauri::command]
+pub async fn untis_send_message(
+    state: State<'_, AppState>,
+    message: Outgoing,
+    files: Vec<String>,
+) -> Result<()> {
+    let mut attachments = Vec::new();
+    for path in files {
+        let path = std::path::PathBuf::from(path);
+        let bytes = std::fs::read(&path)
+            .map_err(|e| CommandError::new("internal", format!("{}: {e}", path.display())))?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Anhang".into());
+        attachments.push((name, bytes));
+    }
+    Ok(untis(&state).send_message(message, &attachments).await?)
 }
 
 #[tauri::command]

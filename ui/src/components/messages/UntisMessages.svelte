@@ -1,18 +1,56 @@
 <script lang="ts">
   import { untrack } from "svelte";
-  import { api, type UntisMessage, type UntisMessageDetail } from "../../lib/api";
+  import { api, type UntisCompose as ComposeData, type UntisMessage, type UntisMessageDetail } from "../../lib/api";
   import { errorText } from "../../lib/errors";
   import { fill, formatDate, formatShort } from "../../lib/format";
   import { i18n } from "../../lib/i18n/index.svelte";
   import { inbox } from "../../lib/inbox.svelte";
   import Avatar from "../Avatar.svelte";
   import Icon from "../Icon.svelte";
+  import UntisCompose from "./UntisCompose.svelte";
 
   let box = $state<"received" | "sent">("received");
   let list = $state<UntisMessage[] | null>(null);
   let news = $state<{ subject: string; html: string }[]>([]);
   let detail = $state<UntisMessageDetail | null>(null);
   let error = $state<string | null>(null);
+  let info = $state<string | null>(null);
+  let compose = $state<ComposeData | null>(null);
+  let writing = $state<{ to: number[]; subject: string } | null>(null);
+
+  /** Neue Mitteilung; bei Antworten an die Absenderin bzw. den Absender. */
+  async function write(reply?: UntisMessageDetail) {
+    error = null;
+    info = null;
+    try {
+      compose ??= await api.untis.compose();
+      if (!compose.allowed) {
+        error = i18n.t.untis.composeNotAllowed;
+        return;
+      }
+      if (!reply) {
+        writing = { to: [], subject: "" };
+        return;
+      }
+      const sender =
+        compose.recipients.find((r) => r.id === reply.senderId) ??
+        compose.recipients.find((r) => r.name === reply.sender);
+      writing = {
+        to: sender ? [sender.id] : [],
+        subject: /^(aw|re):/i.test(reply.subject) ? reply.subject : i18n.t.untis.replyPrefix + reply.subject,
+      };
+    } catch (e) {
+      error = errorText(e);
+    }
+  }
+
+  function written(sent: boolean) {
+    writing = null;
+    if (sent) {
+      info = i18n.t.untis.sentDone;
+      if (box === "sent") load();
+    }
+  }
 
   async function load() {
     error = null;
@@ -27,12 +65,15 @@
   function choose(next: "received" | "sent") {
     box = next;
     detail = null;
+    writing = null;
     list = null;
     load();
   }
 
   async function open(m: UntisMessage) {
     error = null;
+    info = null;
+    writing = null;
     try {
       detail = await api.untis.message(m.id);
       m.read = true;
@@ -56,7 +97,7 @@
   });
 </script>
 
-<div class="split" class:detail={!!detail}>
+<div class="split" class:detail={!!detail || !!writing}>
   <aside>
     <div class="boxes">
       <button class="chip" class:on={box === "received"} onclick={() => choose("received")}>
@@ -64,6 +105,10 @@
       </button>
       <button class="chip" class:on={box === "sent"} onclick={() => choose("sent")}>
         <Icon name="send" size={14} />{i18n.t.untis.sent}
+      </button>
+      <span class="grow"></span>
+      <button class="btn small primary" onclick={() => write()} title={i18n.t.untis.compose}>
+        <Icon name="plus" size={14} />{i18n.t.untis.compose}
       </button>
     </div>
     {#each box === "received" ? news : [] as n, i (i)}
@@ -92,7 +137,12 @@
   </aside>
   <section class="pane">
     {#if error}<p class="notice error">{error}</p>{/if}
-    {#if detail}
+    {#if info}<p class="notice">{info}</p>{/if}
+    {#if writing && compose}
+      {#key writing}
+        <UntisCompose {compose} to={writing.to} subject={writing.subject} ondone={written} />
+      {/key}
+    {:else if detail}
       <article>
         <header>
           <button class="btn ghost small back" onclick={() => (detail = null)} aria-label={i18n.t.messages.back}>
@@ -106,10 +156,18 @@
         {#if detail.attachments.length}
           <p class="muted small"><Icon name="paperclip" size={14} /> {i18n.t.untis.attachments}: {detail.attachments.join(", ")}</p>
         {/if}
-        <button class="btn small" onclick={() => api.untis.openWeb().catch((e) => (error = errorText(e)))}>
-          <Icon name="external" size={14} />
-          {i18n.t.untis.openWeb}
-        </button>
+        <div class="actions">
+          {#if box === "received"}
+            <button class="btn small primary" onclick={() => detail && write(detail)}>
+              <Icon name="reply" size={14} />
+              {i18n.t.untis.reply}
+            </button>
+          {/if}
+          <button class="btn small" onclick={() => api.untis.openWeb().catch((e) => (error = errorText(e)))}>
+            <Icon name="external" size={14} />
+            {i18n.t.untis.openWeb}
+          </button>
+        </div>
       </article>
     {:else}
       <div class="empty">
@@ -135,8 +193,17 @@
     border-right: 1px solid var(--border);
     overflow-y: auto;
   }
+  .grow {
+    flex: 1;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
   .boxes {
     display: flex;
+    align-items: center;
     gap: 6px;
     padding: 10px 12px;
     border-bottom: 1px solid var(--border);

@@ -284,8 +284,23 @@ export interface UntisMessageDetail {
   subject: string;
   html: string;
   sender: string;
+  senderId: number | null;
   sent: string;
   attachments: string[];
+}
+
+export interface UntisRecipient {
+  id: number;
+  name: string;
+  group: string;
+  tags: string[];
+}
+
+export interface UntisCompose {
+  allowed: boolean;
+  recipients: UntisRecipient[];
+  maxFileSize: number | null;
+  maxFileCount: number | null;
 }
 
 export interface Deadline {
@@ -557,6 +572,9 @@ export const api = {
     message: (id: number) => invoke<UntisMessageDetail>("untis_message", { id }),
     dayNews: () => invoke<{ subject: string; html: string }[]>("untis_day_news"),
     openWeb: () => invoke<void>("untis_open_web"),
+    compose: () => invoke<UntisCompose>("untis_compose"),
+    send: (message: { subject: string; content: string; recipients: number[] }, files: string[]) =>
+      invoke<void>("untis_send_message", { message, files }),
   },
 
   today: {

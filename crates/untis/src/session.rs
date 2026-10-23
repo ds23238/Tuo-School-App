@@ -209,8 +209,43 @@ impl<'a> Session<'a> {
         path: &str,
         query: &[(&str, String)],
     ) -> Result<T> {
+        self.rest_with(bearer, path, query, &[]).await
+    }
+
+    pub(crate) async fn rest_with<T: DeserializeOwned>(
+        &self,
+        bearer: bool,
+        path: &str,
+        query: &[(&str, String)],
+        extra: &[(&str, String)],
+    ) -> Result<T> {
         self.with_session(bearer, |client, session, jwt| async move {
-            client.rest(&session, jwt.as_deref(), path, query).await
+            client
+                .rest_with(&session, jwt.as_deref(), path, query, extra)
+                .await
+        })
+        .await
+    }
+
+    /// Formular mit Token senden; liefert Status und Antworttext.
+    pub(crate) async fn post_form(
+        &self,
+        path: &str,
+        extra: &[(&str, String)],
+        request_json: &str,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<(u16, String)> {
+        self.with_session(true, |client, session, jwt| async move {
+            client
+                .post_form(
+                    &session,
+                    jwt.as_deref(),
+                    path,
+                    extra,
+                    request_json.to_owned(),
+                    files.to_vec(),
+                )
+                .await
         })
         .await
     }
