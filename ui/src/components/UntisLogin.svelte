@@ -23,6 +23,55 @@
   let searching = $state(false);
   let error = $state<string | null>(null);
 
+  // Schulen außerhalb der offiziellen Suche (eigener Server, Testserver).
+  let manual = $state(false);
+  let manualServer = $state("");
+  let manualSchool = $state("");
+  /** Selbst eingetragen: nicht mehr aus der Adresse überschreiben. */
+  let schoolEdited = $state(false);
+
+  /** Server und Kennung, auch aus einer kopierten WebUntis-Adresse. */
+  function manualEntry(): School | null {
+    const raw = manualServer.trim();
+    if (!raw) return null;
+    let url: URL;
+    try {
+      url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    } catch {
+      return null;
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    const loginName = manualSchool.trim() || url.searchParams.get("school") || "";
+    if (!url.host || !loginName) return null;
+    return {
+      server: url.protocol === "https:" ? url.host : `http://${url.host}`,
+      loginName,
+      displayName: loginName,
+      address: url.host,
+    };
+  }
+
+  function useManual() {
+    const entry = manualEntry();
+    if (!entry) {
+      error = i18n.t.untis.manualInvalid;
+      return;
+    }
+    error = null;
+    school = entry;
+  }
+
+  /** Kennung aus einer eingefügten Adresse übernehmen. */
+  function serverInput() {
+    try {
+      const raw = manualServer.trim();
+      const found = new URL(raw.includes("://") ? raw : `https://${raw}`).searchParams.get("school");
+      if (!schoolEdited) manualSchool = found ?? "";
+    } catch {
+      // Unvollständige Eingabe, noch keine Adresse.
+    }
+  }
+
   let timer: ReturnType<typeof setTimeout> | undefined;
   function search() {
     clearTimeout(timer);
@@ -82,6 +131,25 @@
           {i18n.t.untis.change}
         </button>
       </div>
+    {:else if manual}
+      <div class="manual">
+        <label>
+          <span class="muted small">{i18n.t.untis.manualServer}</span>
+          <input type="text" bind:value={manualServer} oninput={serverInput} placeholder="neilo.webuntis.com" />
+          <small class="muted">{i18n.t.untis.manualServerHint}</small>
+        </label>
+        <label>
+          <span class="muted small">{i18n.t.untis.manualSchool}</span>
+          <input type="text" bind:value={manualSchool} oninput={() => (schoolEdited = manualSchool.trim() !== "")} />
+          <small class="muted">{i18n.t.untis.manualSchoolHint}</small>
+        </label>
+        <div class="row">
+          <button type="button" class="btn small" onclick={useManual}>{i18n.t.untis.manualUse}</button>
+          <button type="button" class="btn ghost small" onclick={() => ((manual = false), (error = null))}>
+            {i18n.t.untis.manualBack}
+          </button>
+        </div>
+      </div>
     {:else}
       <label class="search">
         <Icon name={searching ? "refresh" : "search"} size={16} class={searching ? "spin" : ""} />
@@ -106,6 +174,7 @@
           {/each}
         </div>
       {/if}
+      <button type="button" class="link" onclick={() => (manual = true)}>{i18n.t.untis.manual}</button>
     {/if}
   </div>
 
@@ -133,6 +202,32 @@
 </form>
 
 <style>
+  .manual {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .manual label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .manual .row {
+    display: flex;
+    gap: 8px;
+  }
+  .link {
+    align-self: flex-start;
+    border: 0;
+    background: none;
+    padding: 0;
+    font-size: 13px;
+    color: var(--accent-strong);
+    cursor: pointer;
+  }
+  .link:hover {
+    text-decoration: underline;
+  }
   form {
     display: flex;
     flex-direction: column;
