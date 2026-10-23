@@ -472,19 +472,24 @@ impl Session<'_> {
             .ok_or_else(|| Error::Response("Anhang nicht gefunden".into()))?;
         let raw = raw_attachment(&v, attachment_id);
 
-        let base = "WebUntis/api/rest/view";
-        let (m, a) = (message_id, attachment_id);
+        // Die Weboberfläche lädt direkt aus dem Dateispeicher:
+        // storage.webuntis.com/untis-sts-prod/<Mandant>/<Anhang>.
         let mut candidates: Vec<String> = found.url.iter().cloned().collect();
-        candidates.extend([
-            format!("{base}/v1/messages/{m}/attachments/{a}"),
-            format!("{base}/v1/messages/attachments/{a}"),
-            format!("{base}/v1/messages/{m}/attachment/{a}"),
-            format!("{base}/v1/messages/attachment/{a}"),
-            format!("{base}/v1/messages/{m}/attachmentstorageurl/{a}"),
-            format!("{base}/v1/messages/attachmentstorageurl/{a}"),
-            format!("{base}/v2/messages/{m}/attachments/{a}"),
-            format!("{base}/v2/messages/attachments/{a}"),
-        ]);
+        match self.tenant().await? {
+            Some(tenant) => candidates.push(format!(
+                "{}/untis-sts-prod/{tenant}/{attachment_id}",
+                crate::client::storage_base()
+            )),
+            None => {
+                return Err(Error::Untis {
+                    code: 404,
+                    message: format!(
+                        "„{}“: Im Token fehlt die Schulnummer (tenant_id).\nDaten: {raw}",
+                        found.name
+                    ),
+                });
+            }
+        }
         let mut tried = Vec::new();
         let mut bytes = None;
         'outer: for url in &candidates {

@@ -227,6 +227,14 @@ impl<'a> Session<'a> {
         .await
     }
 
+    /// Mandant der Schule aus dem Token.
+    pub(crate) async fn tenant(&self) -> Result<Option<String>> {
+        self.with_session(true, |_, _, jwt| async move {
+            Ok(jwt.as_deref().and_then(crate::client::tenant_id))
+        })
+        .await
+    }
+
     /// Datei mit Sitzung laden; liefert Status, Inhaltstyp und Bytes.
     pub(crate) async fn get_bytes(&self, url: &str) -> Result<(u16, Option<String>, Vec<u8>)> {
         self.with_session(true, |client, session, jwt| async move {

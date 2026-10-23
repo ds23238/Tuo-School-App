@@ -89,8 +89,13 @@ fn token_from(raw: &str) -> Option<String> {
     (!token.is_empty()).then_some(token)
 }
 
+/// Dateispeicher für Anhänge; für Tests per Umgebung umstellbar.
+pub(crate) fn storage_base() -> String {
+    std::env::var("TSA_UNTIS_STORAGE").unwrap_or_else(|_| "https://storage.webuntis.com".into())
+}
+
 /// Mandant (Schule) aus dem Token; manche Schnittstellen verlangen ihn.
-fn tenant_id(token: &str) -> Option<String> {
+pub(crate) fn tenant_id(token: &str) -> Option<String> {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     let payload = token.split('.').nth(1)?;
     let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
@@ -417,8 +422,20 @@ impl Client {
             .join(url.trim_start_matches('/'))
             .map_err(|e| Error::Response(e.to_string()))?;
         let own = url.host_str() == self.base.host_str();
+        // Der Dateispeicher von Untis will Token und Mandant, aber keine
+        // Cookies; fremde, vorsignierte Links bekommen gar nichts.
+        let storage = url.as_str().starts_with(&storage_base());
         let request = if own {
             self.view_request(self.http.get(url), session, bearer, &[])
+        } else if storage {
+            let mut request = self.http.get(url);
+            if let Some(token) = bearer {
+                request = request.bearer_auth(token);
+                if let Some(tenant) = tenant_id(token) {
+                    request = request.header("Tenant-Id", tenant);
+                }
+            }
+            request
         } else {
             self.http.get(url)
         };
