@@ -41,7 +41,8 @@ struct Inner {
 }
 
 /// Zustand über einzelne Aufrufe hinweg (Art des Zugriffs, Sitzung). Lebt
-/// nur im Speicher.
+/// nur im Speicher. Die Browser-Sitzung nutzen auch andere Plugins ohne
+/// App-Schnittstelle (Board), denn Auto-Login-Schlüssel sind knapp.
 #[derive(Default)]
 pub struct MailState(Mutex<Inner>);
 
@@ -463,7 +464,7 @@ impl Session<'_> {
                 {
                     return Err(Error::MailLogin);
                 }
-                let Some(web) = self.web_login().await? else {
+                let Some(web) = self.web_login("local/mail/view.php").await? else {
                     inner.failed_login = Some(Instant::now());
                     return Err(Error::MailLogin);
                 };
@@ -507,10 +508,44 @@ impl Session<'_> {
         })
     }
 
-    async fn web_login(&self) -> Result<Option<WebSession>> {
+    /// Ruft eine Funktion über die Browser-Sitzung auf (`lib/ajax/service.php`);
+    /// meldet sich bei Bedarf über `page` an, eine Seite des Plugins.
+    pub(crate) async fn web_call<T: DeserializeOwned>(
+        &self,
+        state: &MailState,
+        page: &str,
+        function: &str,
+        args: Value,
+    ) -> Result<T> {
+        let mut inner = state.0.lock().await;
+        if let Some(web) = &inner.web {
+            match web.call(function, &args).await {
+                Err(e) if session_expired(&e) => inner.web = None,
+                result => return result,
+            }
+        }
+        if inner
+            .failed_login
+            .is_some_and(|t| t.elapsed() < LOGIN_BACKOFF)
+        {
+            return Err(Error::MailLogin);
+        }
+        let Some(web) = self.web_login(page).await? else {
+            inner.failed_login = Some(Instant::now());
+            return Err(Error::MailLogin);
+        };
+        inner.failed_login = None;
+        let result = web.call(function, &args).await;
+        inner.web = Some(web);
+        result
+    }
+
+    async fn web_login(&self, page: &str) -> Result<Option<WebSession>> {
         let base = self.base()?;
         let http = browser();
-        let target = base.join("local/mail/view.php").expect("relativer Pfad");
+        let target = base
+            .join(page)
+            .map_err(|_| Error::InvalidUrl(page.to_owned()))?;
         let open = async |url: Url| -> Result<Option<String>> {
             let response = http.get(url).send().await?;
             if response.url().path() != target.path() {

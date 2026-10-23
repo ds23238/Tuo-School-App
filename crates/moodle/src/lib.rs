@@ -2,6 +2,8 @@
 
 pub mod activities;
 pub mod assign;
+pub mod board;
+pub mod choice;
 pub mod client;
 pub mod contents;
 pub mod courses;
@@ -9,6 +11,7 @@ pub mod data;
 pub mod deadlines;
 pub mod error;
 pub mod forum;
+pub mod glossary;
 pub mod html;
 pub mod mail;
 pub mod messages;

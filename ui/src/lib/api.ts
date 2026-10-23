@@ -219,6 +219,38 @@ export interface MoodleDatabase {
   addUrl: string;
 }
 
+export interface Choice {
+  id: number;
+  options: { id: number; text: string; checked: boolean; disabled: boolean; votes: number | null; percent: number | null }[];
+  multiple: boolean;
+  canUpdate: boolean;
+  answered: boolean;
+  open: boolean;
+  opens: number | null;
+  closes: number | null;
+  results: boolean;
+}
+
+export interface GlossaryEntry {
+  id: number;
+  concept: string;
+  html: string;
+  author: string;
+  created: number;
+  approved: boolean;
+  attachments: FileRef[];
+}
+
+export interface Glossary {
+  id: number;
+  entries: GlossaryEntry[];
+  canAdd: boolean;
+}
+
+export interface Board {
+  columns: { id: number; name: string; notes: { id: number; heading: string; html: string; created: number; rating: number }[] }[];
+}
+
 export interface AssignFile {
   name: string;
   size: number;
@@ -580,6 +612,15 @@ export const api = {
       invoke<number>("moodle_forum_add", { courseId, moduleId, subject, text }),
     database: (courseId: number, moduleId: number) =>
       invoke<Cached<MoodleDatabase>>("moodle_database", { courseId, moduleId }),
+    choice: (courseId: number, moduleId: number) => invoke<Cached<Choice>>("moodle_choice", { courseId, moduleId }),
+    choiceAnswer: (choiceId: number, options: number[]) => invoke<void>("moodle_choice_answer", { choiceId, options }),
+    glossary: (courseId: number, moduleId: number) =>
+      invoke<Cached<Glossary>>("moodle_glossary", { courseId, moduleId }),
+    glossaryAdd: (glossaryId: number, concept: string, text: string) =>
+      invoke<void>("moodle_glossary_add", { glossaryId, concept, text }),
+    glossaryAttachment: (courseId: number, moduleId: number, entryId: number, name: string) =>
+      invoke<void>("moodle_glossary_attachment", { courseId, moduleId, entryId, name }),
+    board: (courseId: number, moduleId: number) => invoke<Cached<Board>>("moodle_board", { courseId, moduleId }),
     forumAttachment: (discussionId: number, postId: number, name: string) =>
       invoke<void>("moodle_forum_attachment", { discussionId, postId, name }),
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),

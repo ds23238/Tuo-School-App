@@ -3,8 +3,11 @@
 use tauri::{AppHandle, Manager, State};
 use tsa_moodle::Session;
 use tsa_moodle::activities::Cached;
+use tsa_moodle::board::Board;
+use tsa_moodle::choice::Choice;
 use tsa_moodle::data::Database;
 use tsa_moodle::forum::{Forum, Thread};
+use tsa_moodle::glossary::Glossary;
 
 use crate::error::Result;
 use crate::{AppState, launch, media};
@@ -78,5 +81,74 @@ pub async fn moodle_database(
 ) -> Result<Cached<Database>> {
     Ok(moodle(&state)
         .database(course_id, module_id, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_choice(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<Cached<Choice>> {
+    Ok(moodle(&state).choice(course_id, module_id).await?)
+}
+
+/// Leere Auswahl zieht die eigene Wahl zurück.
+#[tauri::command]
+pub async fn moodle_choice_answer(
+    state: State<'_, AppState>,
+    choice_id: i64,
+    options: Vec<i64>,
+) -> Result<()> {
+    Ok(moodle(&state).choice_answer(choice_id, &options).await?)
+}
+
+#[tauri::command]
+pub async fn moodle_glossary(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<Cached<Glossary>> {
+    Ok(moodle(&state)
+        .glossary(course_id, module_id, &media::urls())
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_glossary_add(
+    state: State<'_, AppState>,
+    glossary_id: i64,
+    concept: String,
+    text: String,
+) -> Result<()> {
+    Ok(moodle(&state)
+        .glossary_add(glossary_id, &concept, &text)
+        .await?)
+}
+
+#[tauri::command]
+pub async fn moodle_glossary_attachment(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+    entry_id: i64,
+    name: String,
+) -> Result<()> {
+    let dir = app.path().app_cache_dir()?.join("glossary");
+    let path = moodle(&state)
+        .glossary_attachment(course_id, module_id, entry_id, &name, &dir)
+        .await?;
+    launch::path(&app, &path).await
+}
+
+#[tauri::command]
+pub async fn moodle_board(
+    state: State<'_, AppState>,
+    course_id: i64,
+    module_id: i64,
+) -> Result<Cached<Board>> {
+    Ok(moodle(&state)
+        .board(&state.mail, course_id, module_id, &media::urls())
         .await?)
 }

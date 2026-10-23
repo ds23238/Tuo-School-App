@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::activities::{Cached, FileRef};
+use crate::assign::text_to_html;
 use crate::html::{MediaUrls, sanitize};
 use crate::{Error, Result, Session, plain};
 
@@ -61,19 +62,6 @@ fn preview(html: &str) -> String {
         Some((i, _)) => format!("{}…", text[..i].trim_end()),
         None => text,
     }
-}
-
-/// Reiner Text als einfaches HTML für Beiträge.
-fn text_html(text: &str) -> String {
-    text.trim()
-        .split("\n\n")
-        .map(|p| {
-            format!(
-                "<p>{}</p>",
-                html_escape::encode_text(p.trim()).replace('\n', "<br>")
-            )
-        })
-        .collect()
 }
 
 impl Session<'_> {
@@ -213,7 +201,7 @@ impl Session<'_> {
                 &[
                     ("postid", post_id.to_string()),
                     ("subject", subject.to_owned()),
-                    ("message", text_html(text)),
+                    ("message", text_to_html(text)),
                 ],
             )
             .await?;
@@ -235,7 +223,7 @@ impl Session<'_> {
                 &[
                     ("forumid", id.to_string()),
                     ("subject", subject.to_owned()),
-                    ("message", text_html(text)),
+                    ("message", text_to_html(text)),
                 ],
             )
             .await?;
@@ -269,14 +257,6 @@ impl Session<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn plain_text_becomes_paragraphs() {
-        assert_eq!(
-            text_html("Hallo <du>\nZeile 2\n\nAbsatz"),
-            "<p>Hallo &lt;du&gt;<br>Zeile 2</p><p>Absatz</p>"
-        );
-    }
 
     #[test]
     fn previews_are_short() {
