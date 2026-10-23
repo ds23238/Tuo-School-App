@@ -1,11 +1,13 @@
 //! Moodle über die REST-API der Mobile-App (`moodle_mobile_app`).
 
+pub mod activities;
 pub mod assign;
 pub mod client;
 pub mod contents;
 pub mod courses;
 pub mod deadlines;
 pub mod error;
+pub mod forum;
 pub mod html;
 pub mod mail;
 pub mod messages;
@@ -71,6 +73,11 @@ const MIGRATIONS: &[&str] = &[
         fetched_at INTEGER NOT NULL
     );",
     "ALTER TABLE moodle_files ADD COLUMN downloaded_at INTEGER;",
+    "CREATE TABLE moodle_activity_cache (
+        key        TEXT PRIMARY KEY,
+        json       TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL
+    );",
 ];
 
 /// Moodle liefert Namen als HTML-Text, z. B. `Kunst &amp; Musik`.

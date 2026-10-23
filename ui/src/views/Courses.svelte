@@ -9,6 +9,7 @@
   import { sync } from "../lib/sync.svelte";
   import AssignmentView from "./AssignmentView.svelte";
   import CourseView from "./CourseView.svelte";
+  import ForumView from "./ForumView.svelte";
   import PageView from "./PageView.svelte";
 
   type Filter = "current" | "past" | "all";
@@ -144,6 +145,8 @@
       {onlogin}
     />
   </div>
+{:else if nav.course && nav.module?.kind === "forum"}
+  {#key nav.module.id}<ForumView course={nav.course} module={nav.module} />{/key}
 {:else if nav.course && nav.module?.kind === "assign"}
   {#key nav.module.id}<AssignmentView course={nav.course} module={nav.module} />{/key}
 {:else if nav.course && nav.module}

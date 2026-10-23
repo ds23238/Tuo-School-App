@@ -146,6 +146,56 @@ export interface PageContent {
   offline: boolean;
 }
 
+/** Daten einer Aktivität mit Stand (offline: gespeicherter Stand). */
+export interface Cached<T> {
+  data: T;
+  fetchedAt: number;
+  offline: boolean;
+}
+
+export interface FileRef {
+  name: string;
+  url: string;
+  size: number;
+}
+
+export interface Forum {
+  id: number;
+  discussions: Discussion[];
+  canPost: boolean;
+}
+
+export interface Discussion {
+  id: number;
+  name: string;
+  author: string;
+  created: number;
+  modified: number;
+  replies: number;
+  unread: number;
+  pinned: boolean;
+  locked: boolean;
+  preview: string;
+}
+
+export interface ForumPost {
+  id: number;
+  parent: number | null;
+  subject: string;
+  author: string;
+  created: number;
+  html: string;
+  attachments: FileRef[];
+  unread: boolean;
+  canReply: boolean;
+}
+
+export interface Thread {
+  id: number;
+  name: string;
+  posts: ForumPost[];
+}
+
 export interface AssignFile {
   name: string;
   size: number;
@@ -498,6 +548,15 @@ export const api = {
   syncNow: () => invoke<CourseSync[]>("sync_now"),
 
   moodle: {
+    forum: (courseId: number, moduleId: number) =>
+      invoke<Cached<Forum>>("moodle_forum", { courseId, moduleId }),
+    forumThread: (discussionId: number) => invoke<Cached<Thread>>("moodle_forum_thread", { discussionId }),
+    forumReply: (postId: number, subject: string, text: string) =>
+      invoke<void>("moodle_forum_reply", { postId, subject, text }),
+    forumAdd: (courseId: number, moduleId: number, subject: string, text: string) =>
+      invoke<number>("moodle_forum_add", { courseId, moduleId, subject, text }),
+    forumAttachment: (discussionId: number, postId: number, name: string) =>
+      invoke<void>("moodle_forum_attachment", { discussionId, postId, name }),
     checkSite: (url: string) => invoke<SiteCheck>("moodle_check_site", { url }),
     login: (url: string, username: string, password: string, remember: boolean) =>
       invoke<Account>("moodle_login", { url, username, password, remember }),

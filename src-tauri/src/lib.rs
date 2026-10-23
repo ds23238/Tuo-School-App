@@ -1,3 +1,4 @@
+mod activities;
 mod autostart;
 mod background;
 mod commands;
@@ -106,6 +107,11 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            activities::moodle_forum,
+            activities::moodle_forum_thread,
+            activities::moodle_forum_reply,
+            activities::moodle_forum_add,
+            activities::moodle_forum_attachment,
             commands::get_settings,
             commands::save_settings,
             commands::list_accounts,

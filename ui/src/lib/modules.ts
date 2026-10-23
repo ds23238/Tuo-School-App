@@ -46,5 +46,5 @@ export function purposeVar(purpose: string): string {
 
 /** Aktivitäten, die die App selbst anzeigt; alles andere öffnet Moodle. */
 export function opensInApp(m: Module): boolean {
-  return ["page", "book", "assign"].includes(m.kind);
+  return ["page", "book", "assign", "forum"].includes(m.kind);
 }
