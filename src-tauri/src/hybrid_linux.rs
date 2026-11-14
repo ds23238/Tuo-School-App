@@ -10,8 +10,8 @@ fn place(view: &webkit2gtk::WebView, bounds: Bounds) -> Result<()> {
     let parent = view
         .parent()
         .ok_or_else(|| CommandError::new("browser", "WebView ohne GTK-Container"))?;
-    let fixed = if let Ok(fixed) = parent.clone().downcast::<gtk::Fixed>() {
-        fixed
+    let layout = if let Ok(layout) = parent.clone().downcast::<gtk::Layout>() {
+        layout
     } else {
         let vbox = parent
             .downcast::<gtk::Box>()
@@ -36,29 +36,50 @@ fn place(view: &webkit2gtk::WebView, bounds: Bounds) -> Result<()> {
             overlay.set_hexpand(true);
             overlay.set_vexpand(true);
             vbox.pack_start(&overlay, true, true, 0);
-            let fixed = gtk::Fixed::new();
-            fixed.set_halign(gtk::Align::Start);
-            fixed.set_valign(gtk::Align::Start);
-            overlay.add_overlay(&fixed);
+            let layout = gtk::Layout::new(None::<&gtk::Adjustment>, None::<&gtk::Adjustment>);
+            // GtkFixed sizes children from their natural requisition, which
+            // WebKit can retain from the previous, wider viewport. A Layout
+            // keeps those requisitions out of the parent's preferred size.
+            layout.connect_size_allocate(|layout, allocation| {
+                for child in layout.children() {
+                    child.size_allocate(&gtk::Allocation::new(
+                        0,
+                        0,
+                        allocation.width(),
+                        allocation.height(),
+                    ));
+                }
+            });
+            layout.set_halign(gtk::Align::Start);
+            layout.set_valign(gtk::Align::Start);
+            overlay.add_overlay(&layout);
             overlay.show();
             overlay
         };
-        let fixed = overlay
+        let layout = overlay
             .children()
             .into_iter()
-            .find_map(|child| child.downcast::<gtk::Fixed>().ok())
+            .find_map(|child| child.downcast::<gtk::Layout>().ok())
             .ok_or_else(|| CommandError::new("browser", "GTK-Browserfläche fehlt"))?;
         vbox.remove(view);
-        fixed.put(view, 0, 0);
-        fixed
+        layout.put(view, 0, 0);
+        layout
     };
     view.set_size_request(bounds.width.round() as i32, bounds.height.round() as i32);
     // The overlay window must cover only the browser viewport. A full-window
-    // transparent GtkFixed intercepts pointer events intended for the sidebar.
-    fixed.set_margin_start(bounds.x.round() as i32);
-    fixed.set_margin_top(bounds.y.round() as i32);
-    fixed.set_size_request(bounds.width.round() as i32, bounds.height.round() as i32);
-    fixed.move_(view, 0, 0);
+    // transparent container intercepts pointer events intended for the sidebar.
+    layout.set_margin_start(bounds.x.round() as i32);
+    layout.set_margin_top(bounds.y.round() as i32);
+    layout.set_size_request(bounds.width.round() as i32, bounds.height.round() as i32);
+    layout.set_size(bounds.width.round() as u32, bounds.height.round() as u32);
+    layout.move_(view, 0, 0);
+    // Update the engine viewport immediately as well as on later GTK layouts.
+    view.size_allocate(&gtk::Allocation::new(
+        0,
+        0,
+        bounds.width.round() as i32,
+        bounds.height.round() as i32,
+    ));
     Ok(())
 }
 
@@ -83,14 +104,14 @@ pub async fn visibility(view: &Webview, visible: bool) -> Result<()> {
         } else {
             inner.hide();
         }
-        if let Some(fixed) = inner
+        if let Some(layout) = inner
             .parent()
-            .and_then(|parent| parent.downcast::<gtk::Fixed>().ok())
+            .and_then(|parent| parent.downcast::<gtk::Layout>().ok())
         {
             if visible {
-                fixed.show();
-            } else if !fixed.children().iter().any(|child| child.is_visible()) {
-                fixed.hide();
+                layout.show();
+            } else if !layout.children().iter().any(|child| child.is_visible()) {
+                layout.hide();
             }
         }
         let _ = send.send(());

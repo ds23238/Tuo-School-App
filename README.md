@@ -108,3 +108,6 @@ Die Rust-Tests prüfen unter anderem die eindeutige Zuordnung von Dateilinks,
 abweichende Herkunft, mehrdeutige Ressourcen, Sitzungs-Cookies und die bestehende
 Dateiversionierung. Tests gegen echte Moodle-Instanzen und den echten
 Systemschlüsselbund sind standardmäßig ignoriert.
+
+Ergebnisse und echte Screenshots des Moodle-Demoserver-Tests stehen im
+[Testbericht zur Hybrid-Oberfläche](docs/hybrid-validation.md).
