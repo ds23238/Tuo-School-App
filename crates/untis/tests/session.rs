@@ -184,3 +184,25 @@ async fn week_relogins_after_expired_session() {
     assert_eq!(session.subjects().unwrap().len(), 2);
     assert!(!week.offline);
 }
+
+#[tokio::test]
+async fn browser_cookies_reconnect_and_are_cleared_on_sign_out() {
+    let server = MockServer::start().await;
+    let (db, secrets, state) = (db(), MemoryStore::default(), UntisState::default());
+    signed_in(&server, &db, &secrets);
+    rpc(
+        &server,
+        "authenticate",
+        json!({"sessionId":"BROWSER", "personId":77, "personType":5}),
+    )
+    .await;
+    let session = Session::new(&db, &secrets, &state);
+    let cookies = session.browser_cookies().await.unwrap();
+    assert!(cookies.contains(&("JSESSIONID".into(), "BROWSER".into())));
+    assert!(cookies.contains(&("schoolname".into(), "\"_dGVzdC1zY2hvb2w=\"".into())));
+    session.sign_out().await.unwrap();
+    assert!(matches!(
+        session.browser_cookies().await,
+        Err(Error::NotSignedIn)
+    ));
+}

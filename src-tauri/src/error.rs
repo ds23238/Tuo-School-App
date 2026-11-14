@@ -63,3 +63,9 @@ impl From<tauri::Error> for CommandError {
 }
 
 pub type Result<T, E = CommandError> = std::result::Result<T, E>;
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}

@@ -48,3 +48,19 @@ pub fn apply(window: &tauri::WebviewWindow, mode: &str) {
         }
     });
 }
+
+/// Apply the same renderer policy to hybrid child views.
+#[cfg(target_os = "linux")]
+pub fn apply_browser(view: &tauri::Webview, mode: &str) {
+    use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
+    let policy = match mode {
+        "always" | "compat" => HardwareAccelerationPolicy::Always,
+        "never" => HardwareAccelerationPolicy::Never,
+        _ => return,
+    };
+    let _ = view.with_webview(move |webview| {
+        if let Some(settings) = WebViewExt::settings(&webview.inner()) {
+            settings.set_hardware_acceleration_policy(policy);
+        }
+    });
+}

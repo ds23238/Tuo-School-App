@@ -1,6 +1,25 @@
 import type { Messages } from "./de";
 
 export const en: Messages = {
+  hybrid: {
+    "back": "Back",
+    "forward": "Forward",
+    "reload": "Reload",
+    "external": "Open in browser",
+    "local": "Local view",
+    "website": "Original website",
+    "loading": "Loading website …",
+    "loginHint": "If required, sign in directly on the website.",
+    "filesHint": "Known Moodle files open the local synced copy.",
+    "downloads": "Downloads",
+    "downloaded": "Download saved · Open folder",
+    "slow": "Loading is taking longer. Reload or switch to the local view.",
+    "fallback": "The website could not be opened. The local view remains available.",
+    "original": "Original website",
+    "sync": "Sync course",
+    "folder": "Course folder",
+    "noAccount": "First connect Moodle or WebUntis in Settings."
+},
   nav: {
     today: "Today",
     courses: "Courses",

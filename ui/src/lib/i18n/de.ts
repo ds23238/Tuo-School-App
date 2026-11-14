@@ -1,4 +1,23 @@
 export const de = {
+  hybrid: {
+    "back": "Zurück",
+    "forward": "Vorwärts",
+    "reload": "Neu laden",
+    "external": "Im Browser öffnen",
+    "local": "Lokale Ansicht",
+    "website": "Original-Webseite",
+    "loading": "Webseite wird geladen …",
+    "loginHint": "Falls erforderlich, direkt auf der Webseite anmelden.",
+    "filesHint": "Bekannte Moodle-Dateien öffnen die lokale Sync-Kopie.",
+    "downloads": "Downloads",
+    "downloaded": "Download gespeichert · Ordner öffnen",
+    "slow": "Das Laden dauert länger. Du kannst neu laden oder zur lokalen Ansicht wechseln.",
+    "fallback": "Die Webseite konnte nicht geöffnet werden. Die lokale Ansicht bleibt verfügbar.",
+    "original": "Originalseite",
+    "sync": "Kurs synchronisieren",
+    "folder": "Kursordner",
+    "noAccount": "Bitte zuerst Moodle oder WebUntis in den Einstellungen verbinden."
+},
   nav: {
     today: "Heute",
     courses: "Kurse",
