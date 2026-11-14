@@ -37,11 +37,10 @@ fn place(view: &webkit2gtk::WebView, bounds: Bounds) -> Result<()> {
             overlay.set_vexpand(true);
             vbox.pack_start(&overlay, true, true, 0);
             let fixed = gtk::Fixed::new();
-            fixed.set_hexpand(true);
-            fixed.set_vexpand(true);
+            fixed.set_halign(gtk::Align::Start);
+            fixed.set_valign(gtk::Align::Start);
             overlay.add_overlay(&fixed);
             overlay.show();
-            fixed.show();
             overlay
         };
         let fixed = overlay
@@ -50,11 +49,16 @@ fn place(view: &webkit2gtk::WebView, bounds: Bounds) -> Result<()> {
             .find_map(|child| child.downcast::<gtk::Fixed>().ok())
             .ok_or_else(|| CommandError::new("browser", "GTK-Browserfläche fehlt"))?;
         vbox.remove(view);
-        fixed.put(view, bounds.x.round() as i32, bounds.y.round() as i32);
+        fixed.put(view, 0, 0);
         fixed
     };
     view.set_size_request(bounds.width.round() as i32, bounds.height.round() as i32);
-    fixed.move_(view, bounds.x.round() as i32, bounds.y.round() as i32);
+    // The overlay window must cover only the browser viewport. A full-window
+    // transparent GtkFixed intercepts pointer events intended for the sidebar.
+    fixed.set_margin_start(bounds.x.round() as i32);
+    fixed.set_margin_top(bounds.y.round() as i32);
+    fixed.set_size_request(bounds.width.round() as i32, bounds.height.round() as i32);
+    fixed.move_(view, 0, 0);
     Ok(())
 }
 
@@ -66,4 +70,33 @@ pub async fn position(view: &Webview, bounds: Bounds) -> Result<()> {
     receive
         .await
         .map_err(|e| CommandError::new("browser", e.to_string()))?
+}
+
+/// Hide the overlay itself when all browser children are hidden; otherwise
+/// its input window would block the local Settings/course page underneath.
+pub async fn visibility(view: &Webview, visible: bool) -> Result<()> {
+    let (send, receive) = tokio::sync::oneshot::channel();
+    view.with_webview(move |platform| {
+        let inner = platform.inner();
+        if visible {
+            inner.show();
+        } else {
+            inner.hide();
+        }
+        if let Some(fixed) = inner
+            .parent()
+            .and_then(|parent| parent.downcast::<gtk::Fixed>().ok())
+        {
+            if visible {
+                fixed.show();
+            } else if !fixed.children().iter().any(|child| child.is_visible()) {
+                fixed.hide();
+            }
+        }
+        let _ = send.send(());
+    })?;
+    receive
+        .await
+        .map_err(|e| CommandError::new("browser", e.to_string()))?;
+    Ok(())
 }

@@ -78,6 +78,19 @@ async fn position(view: &Webview, bounds: Bounds) -> Result<()> {
     }
 }
 
+async fn hide(view: &Webview) -> Result<()> {
+    view.hide()?;
+    #[cfg(target_os = "linux")]
+    linux::visibility(view, false).await?;
+    Ok(())
+}
+async fn show(view: &Webview) -> Result<()> {
+    view.show()?;
+    #[cfg(target_os = "linux")]
+    linux::visibility(view, true).await?;
+    Ok(())
+}
+
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Status {
@@ -335,7 +348,7 @@ pub async fn reset(app: &AppHandle, site: Site) -> Result<()> {
         }
     }
     if let Some(view) = app.get_webview(site.label()) {
-        view.hide()?;
+        hide(&view).await?;
         view.clear_all_browsing_data()?;
         view.close()?;
     } else if previous_profile.exists() {
@@ -350,7 +363,7 @@ pub async fn reset(app: &AppHandle, site: Site) -> Result<()> {
             LogicalPosition::new(-10_000, -10_000),
             LogicalSize::new(1, 1),
         )?;
-        view.hide()?;
+        hide(&view).await?;
         view.clear_all_browsing_data()?;
         view.close()?;
     }
@@ -421,7 +434,7 @@ pub async fn hybrid_open(
     };
     for site in [Site::Moodle, Site::Untis] {
         if let Some(view) = app.get_webview(site.label()) {
-            view.hide()?;
+            hide(&view).await?;
         }
     }
     let existing = app.get_webview(site.label());
@@ -481,11 +494,11 @@ pub async fn hybrid_open(
         }
     }
     if browsers.generation.load(Ordering::SeqCst) != generation {
-        view.hide()?;
+        hide(&view).await?;
         return Ok(());
     }
     view.navigate(url)?;
-    view.show()?;
+    show(&view).await?;
     Ok(())
 }
 
@@ -508,11 +521,11 @@ pub async fn hybrid_hide(app: AppHandle, caller: Webview, site: Site) -> Result<
     let browsers = app.state::<Browsers>();
     browsers.generation.fetch_add(1, Ordering::SeqCst);
     if let Some(view) = app.get_webview(site.label()) {
-        view.hide()?;
+        hide(&view).await?;
     }
     let _guard = browsers.lock.lock().await;
     if let Some(view) = app.get_webview(site.label()) {
-        view.hide()?;
+        hide(&view).await?;
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
