@@ -6,6 +6,28 @@ Getestet am 14. November 2026 mit dem nativen Linux-Build der App und
 Studentenkonto. Die folgenden Bilder zeigen den echten Server in der App.
 Es wurden keine Nachrichten gesendet und keine Kursinhalte auf dem Server geändert.
 
+## Ergänzung vom 16. November 2026
+
+Moodle-Mitteilungen starten jetzt nativ. Kurse und WebUntis-Mitteilungen starten
+weiterhin mit der Web-Anzeige; die Wahl wird je Bereich gespeichert und lässt
+sich auch in den Einstellungen ändern. Für WebUntis wurde der unzutreffende
+Pfad `/basic/messages` durch die aktuelle Route `/basic/messagecenter` ersetzt.
+Die Route wurde in der öffentlich ausgelieferten WebUntis-Navigation geprüft;
+ein angemeldeter WebUntis-Live-Test steht weiterhin aus.
+
+Web-Ansichten können auf Knopfdruck das tatsächlich gespeicherte Passwort samt
+Benutzername anzeigen. Der native Secret-Service-Test verwendete ausschließlich
+ein lokales Testkonto: Anzeige per echtem Mausklick, Ausblenden, native
+Moodle-Mitteilungen und gespeicherter Anzeigewechsel wurden geprüft. Tokens und
+App-Schlüssel werden nicht als Passwörter verwendet. Die automatisierten
+Oberflächentests prüfen zusätzlich die zeitgesteuerte Ausblendung und dass ohne
+gespeichertes Passwort kein Anzeigebutton erscheint.
+
+Für diesen Stand bestehen 93 Rust-Tests und fünf Playwright-Tests, die
+Svelte-/TypeScript-Prüfung, der Frontend-Build sowie Clippy. Actions werden für
+diesen Arbeitsauftrag nicht gestartet. Ein AppImage-Testbuild wird lokal in einer
+Ubuntu-22.04-Containerumgebung erstellt.
+
 ## Ergebnisse
 
 | Prüfung | Ergebnis |
@@ -108,8 +130,10 @@ protokollierten Ergebnisse und gilt nicht bereits als bestanden.
    „Digital Literacy“, sofern dieser weiterhin verfügbar ist.
 3. Prüfen, ob die Originalseite bereits angemeldet erscheint, ohne dort erneut
    Benutzername und Passwort einzugeben. Den sichtbaren Kontonamen kontrollieren.
-4. Nachrichten und Benachrichtigungen öffnen und wieder zum Kurs wechseln.
-   Dabei keine Nachrichten versenden oder Kursinhalte bearbeiten.
+4. Nachrichten und Benachrichtigungen öffnen: Moodle muss zunächst die native
+   Ansicht zeigen. Bei Bedarf ausdrücklich auf Web umschalten, die Originalseite
+   prüfen und zur nativen Anzeige zurückwechseln. Danach wieder zum Kurs wechseln.
+   Keine Nachrichten versenden oder Kursinhalte bearbeiten.
 
 **Erwartet:** Die API-Anmeldung funktioniert, die Originalseiten laden und die
 Web-Sitzung bleibt beim Wechsel zwischen Ansichten erhalten. Eine zusätzliche
@@ -194,7 +218,27 @@ im getrennten Download-Ordner landen und müssen als solcher Fall notiert werden
 - [ ] Zum eigenen Stundenplan und zurück wechseln. Die lokale Navigation bleibt
   bedienbar, während die Originalseiten innerhalb ihres Bereichs navigieren.
 
-### 5. Separater Netzwerkwechsel-Test
+### 5. Gespeicherte Anzeige und Zugangsdaten
+
+- [ ] In den Einstellungen die Anzeige für Kurse, Moodle-Mitteilungen und
+  WebUntis-Mitteilungen jeweils separat ändern. Die Auswahl muss nach Wechsel
+  des Bereichs und nach einem vollständigen Neustart erhalten bleiben.
+- [ ] Ohne vorherige Auswahl gilt Web für Kurse und WebUntis-Mitteilungen,
+  Native für Moodle-Mitteilungen.
+- [ ] Falls ein WebUntis-Testkonto vorhanden ist: Unter Mitteilungen den
+  Untis-Tab öffnen. Die Web-Anzeige muss direkt das Mitteilungszentrum öffnen,
+  nicht die WebUntis-Startseite. Nach einer gegebenenfalls erforderlichen
+  Web-Anmeldung den Zielbereich erneut kontrollieren.
+- [ ] Für ein entbehrliches Testkonto ohne gespeichertes Passwort darf kein
+  Button zum Anzeigen gespeicherter Zugangsdaten erscheinen. Ein gespeicherter
+  App-Schlüssel oder Token allein reicht nicht aus.
+- [ ] Nur für ein absichtlich mit Passwort gespeichertes Testkonto die
+  Zugangsdaten anzeigen. Benutzername und vollständiges Passwort kontrollieren,
+  anschließend manuell ausblenden. Erneut anzeigen und die automatische
+  Ausblendung nach 30 Sekunden sowie beim Verlassen der Webansicht prüfen.
+  Zugangsdaten niemals in Screenshots oder Testprotokolle aufnehmen.
+
+### 6. Separater Netzwerkwechsel-Test
 
 Erst nach dem unveränderten Netzwerkdurchlauf optional einen Netzwerk- oder
 VPN-Wechsel testen. Zeitpunkt und Änderung genau notieren. Ein dabei auftretender

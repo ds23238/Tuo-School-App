@@ -1,9 +1,20 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { api, type Settings } from "./api";
+import { api, type Settings, type DisplayMode, type DisplayArea } from "./api";
 
 /** Farbschema und Fachfarben aus den Einstellungen, für alle Ansichten. */
 class Appearance {
   theme = $state("system");
+  courseDisplay = $state<DisplayMode>("web");
+  moodleMessagesDisplay = $state<DisplayMode>("native");
+  untisMessagesDisplay = $state<DisplayMode>("web");
+
+  async setDisplay(area: DisplayArea, mode: DisplayMode) {
+    const field = { courses: "courseDisplay", moodleMessages: "moodleMessagesDisplay", untisMessages: "untisMessagesDisplay" }[area];
+    const settings = await api.getSettings();
+    const next = { ...settings, [field]: mode };
+    await api.saveSettings(next);
+    this.apply(next);
+  }
   subjectColors = $state<Record<string, string>>({});
 
   constructor() {
@@ -15,6 +26,9 @@ class Appearance {
 
   apply(settings: Settings) {
     this.theme = settings.theme;
+    this.courseDisplay = settings.courseDisplay ?? "web";
+    this.moodleMessagesDisplay = settings.moodleMessagesDisplay ?? "native";
+    this.untisMessagesDisplay = settings.untisMessagesDisplay ?? "web";
     this.subjectColors = settings.subjectColors ?? {};
     const root = document.documentElement;
     if (settings.theme === "light" || settings.theme === "dark") root.dataset.theme = settings.theme;

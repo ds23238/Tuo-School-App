@@ -1,4 +1,6 @@
 <script lang="ts">
+  import DisplayModeSwitch from "./DisplayModeSwitch.svelte";
+  import SavedCredentials from "./SavedCredentials.svelte";
   import { onMount, type Snippet } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
@@ -7,9 +9,9 @@
   import { errorText } from "../lib/errors";
   import { i18n } from "../lib/i18n/index.svelte";
 
-  let { site, target, title, courseId, onback, onlocal, actions }: {
+  let { site, target, title, courseId, onback, onlocal, actions, showModeSwitch = true }: {
     site: Service; target?: string; title: string; courseId?: number;
-    onback?: () => void; onlocal: () => void; actions?: Snippet;
+    onback?: () => void; onlocal: () => void | Promise<void>; actions?: Snippet; showModeSwitch?: boolean;
   } = $props();
 
   let host: HTMLDivElement;
@@ -84,7 +86,8 @@
       <button class="btn small" onclick={() => action("reload")}>{i18n.t.hybrid.reload}</button>
       {@render actions?.()}
       <button class="btn small" onclick={() => action("external")}>{i18n.t.hybrid.external}</button>
-      <button class="btn small" onclick={onlocal}>{i18n.t.hybrid.local}</button>
+      {#if showModeSwitch}<DisplayModeSwitch mode="web" onchange={(mode) => { if (mode === "native") return onlocal(); }} />{/if}
+      <SavedCredentials {site} />
     </div>
   </header>
   <div class="status" role="status">

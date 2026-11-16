@@ -2,6 +2,18 @@ import type { Messages } from "./de";
 
 export const en: Messages = {
   hybrid: {
+    "native": "Native view",
+    "web": "Web view",
+    "display": "Display",
+    "courseDisplay": "Courses: display",
+    "moodleMessagesDisplay": "Moodle messages: display",
+    "untisMessagesDisplay": "WebUntis messages: display",
+    "credentials": "Show saved credentials",
+    "hideCredentials": "Hide credentials",
+    "savedUsername": "Saved username",
+    "savedPassword": "Saved password",
+    "credentialsHint": "Hidden automatically after 30 seconds.",
+
     "back": "Back",
     "forward": "Forward",
     "reload": "Reload",

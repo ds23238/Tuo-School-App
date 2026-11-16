@@ -4,6 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type Service = "moodle" | "untis";
 
+export type DisplayMode = "native" | "web";
+export type DisplayArea = "courses" | "moodleMessages" | "untisMessages";
+
 export interface Settings {
   /** `null` = Systemsprache. */
   locale: string | null;
@@ -17,6 +20,9 @@ export interface Settings {
   theme: string;
   /** Eigene Farben je Untis-Fach (Kürzel → `#rrggbb`). */
   subjectColors: Record<string, string>;
+  courseDisplay: DisplayMode;
+  moodleMessagesDisplay: DisplayMode;
+  untisMessagesDisplay: DisplayMode;
 }
 
 export interface SyncStatus {

@@ -8,11 +8,15 @@ Die Sidebar, die Heute-Übersicht, der eigene Stundenplan einschließlich
 Hausaufgaben und Prüfungen, Einstellungen und Datei-Synchronisierung bleiben
 lokal. Die Kursübersicht bleibt ebenfalls lokal, damit sich Kurse für den Sync
 auswählen lassen. Beim Öffnen eines Kurses zeigt die App die Moodle-Originalseite
-im Inhaltsbereich. Unter Mitteilungen öffnen sich die Originalseiten für
-Moodle-Chats, Benachrichtigungen, das optionale Mail-Plugin und WebUntis.
+im Inhaltsbereich. Unter Mitteilungen erscheinen Moodle-Chats, Benachrichtigungen und das optionale
+Mail-Plugin standardmäßig in der nativen App-Oberfläche. WebUntis öffnet direkt
+das Mitteilungszentrum (`#/basic/messagecenter`).
 
 Die Leiste über der Webseite bietet Zurück/Vorwärts, Neuladen, Öffnen im
-Systembrowser und den Wechsel zur **lokalen Ansicht**. Bei Kursen bleiben
+Systembrowser und den Wechsel zwischen **nativer Anzeige** und **Web-Anzeige**.
+Die Auswahl wird getrennt für Kurse, Moodle-Mitteilungen und WebUntis-Mitteilungen
+in den Einstellungen gespeichert. Standard ist Web für Kurse und WebUntis sowie
+Native für Moodle-Mitteilungen. Bei Kursen bleiben
 Synchronisieren und das Öffnen des lokalen Kursordners erreichbar. Die bisherige
 Kurs- und Nachrichtenoberfläche bleibt als Rückfall verfügbar, einschließlich
 der bereits vorhandenen Offline-Caches. Originalseiten selbst benötigen eine
@@ -34,6 +38,17 @@ geschlossen und die Browserdaten zur Löschung angewiesen. Der nächste Login
 verwendet zusätzlich einen neuen Profilordner, damit die asynchrone Bereinigung
 der Browserengine keine alte Sitzung wiederherstellen kann. Lokale Dateien im
 Sync-Ordner bleiben wie bisher bestehen.
+
+### Gespeicherte Zugangsdaten anzeigen
+
+In Web-Ansichten erscheint ein Button zum Anzeigen der gespeicherten
+Zugangsdaten, wenn für den Dienst ein vollständiges Passwort im
+Systemschlüsselbund gespeichert wurde. Benutzername und Passwort werden nur auf
+Knopfdruck in der lokalen App-Oberfläche angezeigt. Beim Ausblenden, Verlassen
+der Ansicht, Fokusverlust oder nach 30 Sekunden verschwindet die Anzeige.
+API-Tokens, Private-Tokens und Untis-App-Schlüssel sind kein Passwort-Ersatz und
+werden nicht angezeigt. Die Zugangsdaten werden weder in Browser-Speicher noch
+in die Zwischenablage geschrieben.
 
 ### Moodle-Dateien
 

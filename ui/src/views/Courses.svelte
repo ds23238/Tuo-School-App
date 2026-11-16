@@ -1,4 +1,6 @@
 <script lang="ts">
+  import DisplayModeSwitch from "../components/DisplayModeSwitch.svelte";
+  import { appearance } from "../lib/appearance.svelte";
   import HybridBrowser from "../components/HybridBrowser.svelte";
   import CourseCard from "../components/CourseCard.svelte";
   import Icon from "../components/Icon.svelte";
@@ -36,7 +38,7 @@
     }
   }
 
-  let localView = $state(false);
+  const localView = $derived(appearance.courseDisplay === "native");
   let browserError = $state<string | null>(null);
 
   async function browserSync() {
@@ -146,13 +148,14 @@
     }
   });
 
-  $effect(() => { if (!nav.course) localView = false; });
 
   load();
 </script>
 
 {#if nav.course && localView}
-  <div class="local-switch"><button class="btn small" onclick={() => (localView = false)}>{i18n.t.hybrid.original}</button></div>
+  <div class="local-switch"><DisplayModeSwitch mode="native" onchange={(mode) => appearance.setDisplay("courses", mode).catch((e) => { browserError = errorText(e); })} />
+    {#if browserError}<p class="notice error">{browserError}</p>{/if}
+  </div>
 {/if}
 {#if !loaded}
   <!-- lädt -->
@@ -168,10 +171,10 @@
 {:else if nav.course && !localView}
   {#key browserTarget}
     <HybridBrowser site="moodle" target={browserTarget} title={nav.module?.name ?? nav.course.fullName}
-      courseId={nav.course.id} onback={() => nav.back()} onlocal={() => (localView = true)}>
+      courseId={nav.course.id} onback={() => nav.back()} onlocal={() => appearance.setDisplay("courses", "native").catch((e) => { browserError = errorText(e); })}>
       {#snippet actions()}
         <button class="btn small" onclick={browserSync}>{i18n.t.hybrid.sync}</button>
-        <button class="btn small" onclick={() => api.moodle.openCourseFolder(nav.course!.id).catch((e) => (browserError = errorText(e)))}>{i18n.t.hybrid.folder}</button>
+        <button class="btn small" onclick={() => api.moodle.openCourseFolder(nav.course!.id).catch((e) => { browserError = errorText(e); })}>{i18n.t.hybrid.folder}</button>
         {#if browserError}<span role="alert">{browserError}</span>{/if}
       {/snippet}
     </HybridBrowser>

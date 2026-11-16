@@ -1,5 +1,17 @@
 export const de = {
   hybrid: {
+    "native": "Native Anzeige",
+    "web": "Web-Anzeige",
+    "display": "Anzeige",
+    "courseDisplay": "Kurse: Anzeige",
+    "moodleMessagesDisplay": "Moodle-Mitteilungen: Anzeige",
+    "untisMessagesDisplay": "WebUntis-Mitteilungen: Anzeige",
+    "credentials": "Gespeicherte Zugangsdaten anzeigen",
+    "hideCredentials": "Zugangsdaten ausblenden",
+    "savedUsername": "Gespeicherter Benutzername",
+    "savedPassword": "Gespeichertes Passwort",
+    "credentialsHint": "Wird nach 30 Sekunden automatisch ausgeblendet.",
+
     "back": "Zurück",
     "forward": "Vorwärts",
     "reload": "Neu laden",

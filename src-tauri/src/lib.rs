@@ -109,6 +109,8 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            hybrid::hybrid_password_available,
+            hybrid::hybrid_saved_credentials,
             hybrid::hybrid_open,
             hybrid::hybrid_bounds,
             hybrid::hybrid_hide,

@@ -452,11 +452,17 @@ impl Session<'_> {
     /// Mitteilungen in WebUntis im Browser (z. B. zum Antworten).
     pub fn web_url(&self) -> Result<String> {
         let school = self.school()?;
-        Ok(format!(
-            "https://{}/WebUntis/?school={}#/basic/messages",
-            school.server,
-            url::form_urlencoded::byte_serialize(school.login_name.as_bytes()).collect::<String>()
-        ))
+        let mut url = self
+            .client()?
+            .base()
+            .join("WebUntis/")
+            .map_err(|e| crate::Error::Response(e.to_string()))?;
+        url.query_pairs_mut()
+            .append_pair("school", &school.login_name);
+        // Current WebUntis navigation names this route MESSAGECENTER.
+        // The former /basic/messages route falls back to the root dashboard.
+        url.set_fragment(Some("/basic/messagecenter"));
+        Ok(url.to_string())
     }
 }
 

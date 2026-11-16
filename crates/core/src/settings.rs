@@ -8,6 +8,13 @@ use crate::{Database, Result};
 
 const KEY: &str = "app";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DisplayMode {
+    Native,
+    Web,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -27,6 +34,9 @@ pub struct Settings {
     pub theme: String,
     /// Eigene Farben je Untis-Fach (Kürzel → `#rrggbb`).
     pub subject_colors: BTreeMap<String, String>,
+    pub course_display: DisplayMode,
+    pub moodle_messages_display: DisplayMode,
+    pub untis_messages_display: DisplayMode,
 }
 
 impl Settings {
@@ -40,6 +50,9 @@ impl Settings {
             graphics: "auto".into(),
             theme: "system".into(),
             subject_colors: BTreeMap::new(),
+            course_display: DisplayMode::Web,
+            moodle_messages_display: DisplayMode::Native,
+            untis_messages_display: DisplayMode::Web,
         }
     }
 
@@ -100,6 +113,20 @@ pub fn delete_value(db: &Database, key: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn display_preferences_upgrade_old_settings_and_persist() {
+        let db = Database::open_in_memory().unwrap();
+        set_value(&db, KEY, r#"{"theme":"dark"}"#).unwrap();
+        let mut settings = Settings::load(&db, Path::new("/sync")).unwrap();
+        assert_eq!(settings.course_display, DisplayMode::Web);
+        assert_eq!(settings.moodle_messages_display, DisplayMode::Native);
+        assert_eq!(settings.untis_messages_display, DisplayMode::Web);
+        settings.course_display = DisplayMode::Native;
+        settings.moodle_messages_display = DisplayMode::Web;
+        settings.save(&db).unwrap();
+        let loaded = Settings::load(&db, Path::new("/sync")).unwrap();
+        assert_eq!(loaded, settings);
+    }
 
     #[test]
     fn defaults_when_empty() {
@@ -120,6 +147,9 @@ mod tests {
             graphics: "never".into(),
             theme: "dark".into(),
             subject_colors: [("M".to_owned(), "#ff0000".to_owned())].into(),
+            course_display: DisplayMode::Native,
+            moodle_messages_display: DisplayMode::Web,
+            untis_messages_display: DisplayMode::Native,
         };
         s.save(&db).unwrap();
         assert_eq!(Settings::load(&db, Path::new("/sync")).unwrap(), s);

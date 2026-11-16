@@ -560,9 +560,111 @@ pub async fn hybrid_action(
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+pub struct SavedCredentials {
+    username: String,
+    password: String,
+}
+
+fn saved_credentials(
+    db: &tsa_core::Database,
+    secrets: &dyn tsa_core::SecretStore,
+    site: Site,
+) -> Result<Option<SavedCredentials>> {
+    let Some(account) = Account::get(db, site.service())? else {
+        return Ok(None);
+    };
+    // A service token or Untis app key is never a password fallback.
+    Ok(secrets
+        .get(site.service(), tsa_core::SecretKind::Password)?
+        .map(|password| SavedCredentials {
+            username: account.username,
+            password,
+        }))
+}
+
+#[tauri::command]
+pub async fn hybrid_password_available(
+    app: AppHandle,
+    caller: Webview,
+    site: Site,
+) -> Result<bool> {
+    local(&caller)?;
+    let state = app.state::<AppState>();
+    Ok(saved_credentials(&state.db, state.secrets.as_ref(), site)?.is_some())
+}
+
+#[tauri::command]
+pub async fn hybrid_saved_credentials(
+    app: AppHandle,
+    caller: Webview,
+    site: Site,
+) -> Result<SavedCredentials> {
+    local(&caller)?;
+    let state = app.state::<AppState>();
+    saved_credentials(&state.db, state.secrets.as_ref(), site)?
+        .ok_or_else(|| CommandError::new("browser", "Kein gespeichertes Passwort vorhanden"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn credentials_only_return_saved_passwords_for_the_selected_account() {
+        use tsa_core::{Database, MemoryStore, SecretKind, SecretStore};
+        let db = Database::open_in_memory().unwrap();
+        let secrets = MemoryStore::default();
+        Account::new(
+            Service::Moodle,
+            "https://school.example/".into(),
+            "student".into(),
+        )
+        .save(&db)
+        .unwrap();
+        secrets
+            .set(Service::Moodle, SecretKind::Token, "api-token")
+            .unwrap();
+        secrets
+            .set(Service::Moodle, SecretKind::PrivateToken, "private-token")
+            .unwrap();
+        assert!(
+            saved_credentials(&db, &secrets, Site::Moodle)
+                .unwrap()
+                .is_none()
+        );
+        secrets
+            .set(Service::Moodle, SecretKind::Password, "saved-test-password")
+            .unwrap();
+        let result = saved_credentials(&db, &secrets, Site::Moodle)
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.username, "student");
+        assert_eq!(result.password, "saved-test-password");
+        Account::new(
+            Service::Untis,
+            "https://school.webuntis.com/".into(),
+            "untis-user".into(),
+        )
+        .save(&db)
+        .unwrap();
+        secrets
+            .set(Service::Untis, SecretKind::Token, "untis-app-key")
+            .unwrap();
+        assert!(
+            saved_credentials(&db, &secrets, Site::Untis)
+                .unwrap()
+                .is_none()
+        );
+        secrets
+            .delete(Service::Moodle, SecretKind::Password)
+            .unwrap();
+        assert!(
+            saved_credentials(&db, &secrets, Site::Moodle)
+                .unwrap()
+                .is_none()
+        );
+    }
+
     #[test]
     fn remote_navigation_rejects_local_protocols_and_credentials() {
         for url in [
