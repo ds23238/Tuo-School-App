@@ -39,6 +39,7 @@ pub async fn untis_login(
     password: String,
     remember: bool,
 ) -> Result<LoginResult> {
+    crate::hybrid::reset(&app, crate::hybrid::Site::Untis).await?;
     let result = untis(&state)
         .login(school, &username, &password, remember)
         .await?;

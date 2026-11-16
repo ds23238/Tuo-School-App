@@ -1,4 +1,8 @@
 <script lang="ts">
+  import HybridBrowser from "../components/HybridBrowser.svelte";
+  import DisplayModeSwitch from "../components/DisplayModeSwitch.svelte";
+  import { appearance } from "../lib/appearance.svelte";
+  import type { DisplayMode } from "../lib/api";
   import Icon from "../components/Icon.svelte";
   import Chats from "../components/messages/Chats.svelte";
   import Mail from "../components/messages/Mail.svelte";
@@ -11,6 +15,8 @@
 
   type Tab = "chats" | "mail" | "notifications" | "untis";
 
+  let modeError = $state<string | null>(null);
+  let untisAccountInfo = $state<Account | null>(null);
   let account = $state<Account | null | undefined>(undefined);
   let untisAccount = $state(false);
   let mail = $state<MailStatus | null>(null);
@@ -40,7 +46,8 @@
   inbox.refresh();
   api.listAccounts().then(async (accounts) => {
     account = accounts.find((a) => a.service === "moodle") ?? null;
-    untisAccount = accounts.some((a) => a.service === "untis");
+    untisAccountInfo = accounts.find((a) => a.service === "untis") ?? null;
+    untisAccount = !!untisAccountInfo;
     if (!account) return;
     try {
       mail = await api.mail.status();
@@ -70,6 +77,15 @@
     return list;
   });
   const current = $derived(tabs.some((t) => t.id === tab) ? tab : (tabs[0]?.id ?? "chats"));
+  const area = $derived(current === "untis" ? "untisMessages" : "moodleMessages");
+  const mode = $derived(current === "untis" ? appearance.untisMessagesDisplay : appearance.moodleMessagesDisplay);
+  const webAccount = $derived(current === "untis" ? untisAccountInfo : account);
+  const target = $derived(current === "untis" ? undefined : current === "mail" ? "local/mail/view.php" : current === "notifications" ? "message/output/popup/notifications.php" : "message/index.php");
+  const title = $derived(tabs.find((t) => t.id === current)?.label ?? i18n.t.messages.title);
+  async function setMode(next: DisplayMode) {
+    try { modeError = null; await appearance.setDisplay(area, next); }
+    catch (e) { modeError = errorText(e); }
+  }
 </script>
 
 <div class="page">
@@ -88,7 +104,15 @@
     {/if}
   </header>
 
-  {#if current === "untis" && untisAccount}
+  {#if account || untisAccount}
+    <DisplayModeSwitch {mode} onchange={setMode} />
+  {/if}
+  {#if modeError}<p class="notice error" role="alert">{modeError}</p>{/if}
+  {#if mode === "web" && webAccount}
+    <div class="web-content">
+      {#key current}<HybridBrowser site={webAccount.service} {target} title={title} showModeSwitch={false} onlocal={() => setMode("native")} />{/key}
+    </div>
+  {:else if current === "untis" && untisAccount}
     <UntisMessages />
   {:else if account === null}
     <p class="muted">{i18n.t.messages.signIn}</p>
@@ -108,6 +132,7 @@
 </div>
 
 <style>
+  .web-content { flex: 1; min-height: 0; }
   .page {
     height: 100vh;
     max-width: 1280px;

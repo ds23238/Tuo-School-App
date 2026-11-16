@@ -4,6 +4,7 @@ mod background;
 mod commands;
 mod error;
 mod graphics;
+mod hybrid;
 mod inbox;
 mod launch;
 mod mapping;
@@ -69,6 +70,7 @@ pub fn run() {
                 has_tray: AtomicBool::new(false),
             });
             app.manage(tray::Tray::default());
+            app.manage(hybrid::Browsers::default());
 
             let handle = app.handle();
             let has_tray = match tray::create(handle) {
@@ -100,13 +102,19 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<AppState>();
-                if state.has_tray.load(Ordering::Relaxed) {
+                if window.label() == "main" && state.has_tray.load(Ordering::Relaxed) {
                     api.prevent_close();
                     let _ = window.hide();
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
+            hybrid::hybrid_password_available,
+            hybrid::hybrid_saved_credentials,
+            hybrid::hybrid_open,
+            hybrid::hybrid_bounds,
+            hybrid::hybrid_hide,
+            hybrid::hybrid_action,
             activities::moodle_forum,
             activities::moodle_forum_thread,
             activities::moodle_forum_reply,

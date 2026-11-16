@@ -114,6 +114,28 @@ impl<'a> Session<'a> {
         cache::clear(self.db)
     }
 
+    /// Cookies for an isolated native browser. Never expose these to frontend IPC.
+    pub async fn browser_cookies(&self) -> Result<Vec<(String, String)>> {
+        use base64::Engine;
+        let school = self.school()?;
+        self.with_session(false, |_, session, _| {
+            let school = school.login_name.clone();
+            async move {
+                Ok(vec![
+                    ("JSESSIONID".into(), session),
+                    (
+                        "schoolname".into(),
+                        format!(
+                            "\"_{}\"",
+                            base64::engine::general_purpose::STANDARD.encode(school)
+                        ),
+                    ),
+                ])
+            }
+        })
+        .await
+    }
+
     pub fn school(&self) -> Result<School> {
         let raw = get_value(self.db, SCHOOL)?.ok_or(Error::NotSignedIn)?;
         Ok(serde_json::from_str(&raw)?)

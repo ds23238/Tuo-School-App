@@ -10,6 +10,7 @@ pub mod courses;
 pub mod data;
 pub mod deadlines;
 pub mod error;
+pub mod file_links;
 pub mod forum;
 pub mod glossary;
 pub mod html;

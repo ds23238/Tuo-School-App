@@ -184,3 +184,52 @@ async fn week_relogins_after_expired_session() {
     assert_eq!(session.subjects().unwrap().len(), 2);
     assert!(!week.offline);
 }
+
+#[tokio::test]
+async fn browser_cookies_reconnect_and_are_cleared_on_sign_out() {
+    let server = MockServer::start().await;
+    let (db, secrets, state) = (db(), MemoryStore::default(), UntisState::default());
+    signed_in(&server, &db, &secrets);
+    rpc(
+        &server,
+        "authenticate",
+        json!({"sessionId":"BROWSER", "personId":77, "personType":5}),
+    )
+    .await;
+    let session = Session::new(&db, &secrets, &state);
+    let cookies = session.browser_cookies().await.unwrap();
+    assert!(cookies.contains(&("JSESSIONID".into(), "BROWSER".into())));
+    assert!(cookies.contains(&("schoolname".into(), "\"_dGVzdC1zY2hvb2w=\"".into())));
+    session.sign_out().await.unwrap();
+    assert!(matches!(
+        session.browser_cookies().await,
+        Err(Error::NotSignedIn)
+    ));
+}
+
+#[tokio::test]
+async fn browser_link_targets_message_center_and_preserves_school() {
+    let server = MockServer::start().await;
+    let (db, secrets, state) = (db(), MemoryStore::default(), UntisState::default());
+    signed_in(&server, &db, &secrets);
+    let mut school: School = serde_json::from_str(
+        &tsa_core::settings::get_value(&db, "untis.school")
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
+    school.login_name = "School + & ä".into();
+    tsa_core::settings::set_value(
+        &db,
+        "untis.school",
+        &serde_json::to_string(&school).unwrap(),
+    )
+    .unwrap();
+    let url = url::Url::parse(&Session::new(&db, &secrets, &state).web_url().unwrap()).unwrap();
+    assert_eq!(url.fragment(), Some("/basic/messagecenter"));
+    assert_eq!(url.path(), "/WebUntis/");
+    assert_eq!(
+        url.query_pairs().find(|(k, _)| k == "school").unwrap().1,
+        school.login_name
+    );
+}

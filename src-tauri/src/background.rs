@@ -30,7 +30,7 @@ pub struct Status {
 
 #[derive(Default)]
 pub struct Background {
-    lock: tokio::sync::Mutex<()>,
+    pub(crate) lock: tokio::sync::Mutex<()>,
     status: Mutex<Status>,
     /// Weckt die Schleife, z. B. nach geänderten Einstellungen.
     wake: tokio::sync::Notify,

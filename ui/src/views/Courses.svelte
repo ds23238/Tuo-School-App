@@ -1,4 +1,7 @@
 <script lang="ts">
+  import DisplayModeSwitch from "../components/DisplayModeSwitch.svelte";
+  import { appearance } from "../lib/appearance.svelte";
+  import HybridBrowser from "../components/HybridBrowser.svelte";
   import CourseCard from "../components/CourseCard.svelte";
   import Icon from "../components/Icon.svelte";
   import MoodleLogin from "../components/MoodleLogin.svelte";
@@ -35,7 +38,17 @@
     }
   }
 
+  const localView = $derived(appearance.courseDisplay === "native");
+  let browserError = $state<string | null>(null);
+
+  async function browserSync() {
+    if (!nav.course) return;
+    try { await api.moodle.syncCourse(nav.course.id); } catch (e) { browserError = errorText(e); }
+  }
+
   let account = $state<Account | null>(null);
+  const browserTarget = $derived(nav.module?.url ?? (nav.course ? `${account?.baseUrl}course/view.php?id=${nav.course.id}` : ""));
+
   let courses = $state<Course[]>([]);
   let stats = $state<Record<string, CourseFiles>>({});
   let loaded = $state(false);
@@ -135,9 +148,15 @@
     }
   });
 
+
   load();
 </script>
 
+{#if nav.course && localView}
+  <div class="local-switch"><DisplayModeSwitch mode="native" onchange={(mode) => appearance.setDisplay("courses", mode).catch((e) => { browserError = errorText(e); })} />
+    {#if browserError}<p class="notice error">{browserError}</p>{/if}
+  </div>
+{/if}
 {#if !loaded}
   <!-- lädt -->
 {:else if !account || expired}
@@ -149,6 +168,17 @@
       {onlogin}
     />
   </div>
+{:else if nav.course && !localView}
+  {#key browserTarget}
+    <HybridBrowser site="moodle" target={browserTarget} title={nav.module?.name ?? nav.course.fullName}
+      courseId={nav.course.id} onback={() => nav.back()} onlocal={() => appearance.setDisplay("courses", "native").catch((e) => { browserError = errorText(e); })}>
+      {#snippet actions()}
+        <button class="btn small" onclick={browserSync}>{i18n.t.hybrid.sync}</button>
+        <button class="btn small" onclick={() => api.moodle.openCourseFolder(nav.course!.id).catch((e) => { browserError = errorText(e); })}>{i18n.t.hybrid.folder}</button>
+        {#if browserError}<span role="alert">{browserError}</span>{/if}
+      {/snippet}
+    </HybridBrowser>
+  {/key}
 {:else if nav.course && nav.module?.kind === "choice"}
   {#key nav.module.id}<ChoiceView course={nav.course} module={nav.module} />{/key}
 {:else if nav.course && nav.module?.kind === "glossary"}
@@ -233,6 +263,7 @@
 {/if}
 
 <style>
+  .local-switch { padding: 10px 20px 0; }
   .page {
     max-width: 1160px;
     margin: 0 auto;

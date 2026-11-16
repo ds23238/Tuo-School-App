@@ -5261,6 +5261,7 @@ version = "0.2.0"
 dependencies = [
  "ashpd",
  "chrono",
+ "gtk",
  "serde",
  "serde_json",
  "sha2",
@@ -5276,6 +5277,7 @@ dependencies = [
  "tsa-core",
  "tsa-moodle",
  "tsa-untis",
+ "url",
  "webkit2gtk",
 ]
 

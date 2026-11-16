@@ -120,6 +120,20 @@
           <option value="dark">{i18n.t.settings.themeDark}</option>
         </select>
       </div>
+      {#each [
+        { key: "courseDisplay", label: i18n.t.hybrid.courseDisplay },
+        { key: "moodleMessagesDisplay", label: i18n.t.hybrid.moodleMessagesDisplay },
+        { key: "untisMessagesDisplay", label: i18n.t.hybrid.untisMessagesDisplay },
+      ] as field}
+        <div class="row">
+          <label for={field.key}>{field.label}</label>
+          <select id={field.key} value={settings[field.key as "courseDisplay" | "moodleMessagesDisplay" | "untisMessagesDisplay"]}
+            onchange={(e) => update({ [field.key]: e.currentTarget.value })}>
+            <option value="web">{i18n.t.hybrid.web}</option>
+            <option value="native">{i18n.t.hybrid.native}</option>
+          </select>
+        </div>
+      {/each}
       {#if graphicsConfigurable}
         <div class="row">
           <div>

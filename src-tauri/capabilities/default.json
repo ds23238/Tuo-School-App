@@ -2,14 +2,14 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Rechte des Hauptfensters",
-  "windows": [
-    "main"
-  ],
   "permissions": [
     "core:default",
     "core:window:allow-set-theme",
     "dialog:allow-open",
     "dialog:allow-ask",
     "opener:default"
+  ],
+  "webviews": [
+    "main"
   ]
 }

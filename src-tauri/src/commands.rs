@@ -34,7 +34,19 @@ pub fn list_accounts(state: State<AppState>) -> Result<Vec<Account>> {
 }
 
 #[tauri::command]
-pub async fn remove_account(state: State<'_, AppState>, service: Service) -> Result<()> {
+pub async fn remove_account(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    service: Service,
+) -> Result<()> {
+    crate::hybrid::reset(
+        &app,
+        match service {
+            Service::Moodle => crate::hybrid::Site::Moodle,
+            Service::Untis => crate::hybrid::Site::Untis,
+        },
+    )
+    .await?;
     match service {
         Service::Moodle => {
             state.mail.reset().await;
@@ -70,12 +82,14 @@ pub async fn moodle_check_site(url: String) -> Result<SiteCheck> {
 
 #[tauri::command]
 pub async fn moodle_login(
+    app: AppHandle,
     state: State<'_, AppState>,
     url: String,
     username: String,
     password: String,
     remember: bool,
 ) -> Result<Account> {
+    crate::hybrid::reset(&app, crate::hybrid::Site::Moodle).await?;
     state.mail.reset().await;
     Ok(moodle(&state)
         .login(&url, &username, &password, remember)
